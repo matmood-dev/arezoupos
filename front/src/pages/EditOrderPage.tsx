@@ -608,6 +608,15 @@ const EditOrderPage: React.FC = () => {
                 </DetailContent>
               </CustomerDetail>
             )}
+            {order.user_name && (
+              <CustomerDetail>
+                <DetailIcon><HiOutlineUser /></DetailIcon>
+                <DetailContent>
+                  <DetailLabel>Created by</DetailLabel>
+                  <DetailText>{order.user_name}</DetailText>
+                </DetailContent>
+              </CustomerDetail>
+            )}
           </CustomerInfo>
         </Section>
 

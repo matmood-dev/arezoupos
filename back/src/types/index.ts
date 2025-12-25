@@ -105,11 +105,15 @@ export interface Order {
   orderid: number;
   customerid?: number;
   branchid?: number;
+  userid?: number;
   items: OrderItem[];
   total_amount: number;
   status: 'pending' | 'completed' | 'cancelled';
   created_at: Date;
   updated_at: Date;
+  // Additional fields from joins
+  user_name?: string;
+  user_email?: string;
 }
 
 export interface CreateOrderRequest {

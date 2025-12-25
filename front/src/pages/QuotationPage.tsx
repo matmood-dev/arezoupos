@@ -362,7 +362,7 @@ const QuotationPage: React.FC = () => {
               <MetaValue>{new Date(order.created_at).toLocaleDateString()}</MetaValue>
 
               <MetaLabel style={{ marginTop: 10 }}>Salesperson</MetaLabel>
-              <MetaValue>{(order as any).salesperson || settings?.shop_name || '-'}</MetaValue>
+              <MetaValue>{order.user_name || settings?.shop_name || '-'}</MetaValue>
             </QuoteBox>
           </RightColumn>
         </InvoiceHeader>

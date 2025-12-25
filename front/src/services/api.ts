@@ -434,6 +434,7 @@ export interface Order {
   orderid: number;
   customerid?: number;
   branchid?: number;
+  userid?: number;
   branch_name?: string;
   branch_phone?: string;
   branch_address?: string;
@@ -442,6 +443,8 @@ export interface Order {
   customer_email?: string;
   customer_phone?: string;
   customer_address?: string;
+  user_name?: string;
+  user_email?: string;
   total_amount: number;
   notes?: string;
   payment_method?: string;

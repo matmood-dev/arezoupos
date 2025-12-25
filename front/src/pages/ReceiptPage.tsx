@@ -255,6 +255,9 @@ const ReceiptPage: React.FC = () => {
             const name = order.customer_name === 'Deleted customer' ? t('orders.deleted_customer') : order.customer_name;
             return <div style={{ marginTop: 4 }}><strong>Customer:</strong> {name}</div>;
           })()}
+          {order.user_name && (
+            <div style={{ marginTop: 4 }}><strong>Served by:</strong> {order.user_name}</div>
+          )}
         </Section>
 
         <Divider />
