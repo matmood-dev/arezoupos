@@ -103,6 +103,28 @@ const createTables = async (): Promise<void> => {
       console.log('⚠️  Could not check/add image column:', error instanceof Error ? error.message : 'Unknown error');
     }
 
+    // Add active column to existing items table if it doesn't exist
+    try {
+      // Check if active column exists
+      const [columns] = await connection.execute(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'items' AND COLUMN_NAME = 'active'
+      `, [process.env.DB_NAME || 'pos_system']);
+
+      const columnRows = columns as any[];
+      if (columnRows.length === 0) {
+        await connection.execute(`
+          ALTER TABLE items ADD COLUMN active BOOLEAN DEFAULT TRUE AFTER image
+        `);
+        console.log('✅ Added active column to items table');
+      } else {
+        console.log('✅ Active column already exists in items table');
+      }
+    } catch (error) {
+      console.log('⚠️  Could not check/add active column:', error instanceof Error ? error.message : 'Unknown error');
+    }
+
     // Create customers table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS customers (
@@ -115,6 +137,28 @@ const createTables = async (): Promise<void> => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+
+    // Add active column to existing customers table if it doesn't exist
+    try {
+      // Check if active column exists
+      const [columns] = await connection.execute(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'customers' AND COLUMN_NAME = 'active'
+      `, [process.env.DB_NAME || 'pos_system']);
+
+      const columnRows = columns as any[];
+      if (columnRows.length === 0) {
+        await connection.execute(`
+          ALTER TABLE customers ADD COLUMN active BOOLEAN DEFAULT TRUE AFTER address
+        `);
+        console.log('✅ Added active column to customers table');
+      } else {
+        console.log('✅ Active column already exists in customers table');
+      }
+    } catch (error) {
+      console.log('⚠️  Could not check/add active column to customers:', error instanceof Error ? error.message : 'Unknown error');
+    }
 
     // Create orders table
     await connection.execute(`
@@ -149,13 +193,51 @@ const createTables = async (): Promise<void> => {
         settingid INT AUTO_INCREMENT PRIMARY KEY,
         shop_name VARCHAR(255) NOT NULL DEFAULT 'My POS Shop',
         shop_logo VARCHAR(500),
+        shop_email VARCHAR(100),
+        vat_registration_number VARCHAR(50),
         currency VARCHAR(10) NOT NULL DEFAULT 'BHD',
         tax_rate DECIMAL(5,2) NOT NULL DEFAULT 12.00 CHECK (tax_rate >= 0 AND tax_rate <= 100),
         receipt_footer TEXT DEFAULT 'Thank you for your business!',
+        bank_name VARCHAR(255),
+        bank_account_name VARCHAR(255),
+        iban_number VARCHAR(50),
+        account_number VARCHAR(50),
+        swift_code VARCHAR(20),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+
+    // Add new columns to existing settings table if they don't exist
+    const settingsColumns = [
+      { name: 'shop_email', type: 'VARCHAR(100)', afterColumn: 'shop_logo' },
+      { name: 'vat_registration_number', type: 'VARCHAR(50)', afterColumn: 'shop_email' },
+      { name: 'bank_name', type: 'VARCHAR(255)', afterColumn: 'receipt_footer' },
+      { name: 'bank_account_name', type: 'VARCHAR(255)', afterColumn: 'bank_name' },
+      { name: 'iban_number', type: 'VARCHAR(50)', afterColumn: 'bank_account_name' },
+      { name: 'account_number', type: 'VARCHAR(50)', afterColumn: 'iban_number' },
+      { name: 'swift_code', type: 'VARCHAR(20)', afterColumn: 'account_number' }
+    ];
+
+    for (const column of settingsColumns) {
+      try {
+        const [columns] = await connection.execute(`
+          SELECT COLUMN_NAME 
+          FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'settings' AND COLUMN_NAME = ?
+        `, [process.env.DB_NAME || 'pos_system', column.name]);
+
+        const columnRows = columns as any[];
+        if (columnRows.length === 0) {
+          await connection.execute(`
+            ALTER TABLE settings ADD COLUMN ${column.name} ${column.type} AFTER ${column.afterColumn}
+          `);
+          console.log(`✅ Added ${column.name} column to settings table`);
+        }
+      } catch (error) {
+        console.log(`⚠️  Could not check/add ${column.name} column:`, error instanceof Error ? error.message : 'Unknown error');
+      }
+    }
 
     // Insert default settings if not exists
     await connection.execute(`
@@ -170,11 +252,31 @@ const createTables = async (): Promise<void> => {
         name VARCHAR(255) NOT NULL,
         address TEXT NOT NULL,
         phone VARCHAR(20),
+        cr VARCHAR(50),
         active BOOLEAN NOT NULL DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
+
+    // Add cr column to existing branches table if it doesn't exist
+    try {
+      const [columns] = await connection.execute(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'branches' AND COLUMN_NAME = 'cr'
+      `, [process.env.DB_NAME || 'pos_system']);
+
+      const columnRows = columns as any[];
+      if (columnRows.length === 0) {
+        await connection.execute(`
+          ALTER TABLE branches ADD COLUMN cr VARCHAR(50) AFTER phone
+        `);
+        console.log('✅ Added cr column to branches table');
+      }
+    } catch (error) {
+      console.log('⚠️  Could not check/add cr column to branches:', error instanceof Error ? error.message : 'Unknown error');
+    }
 
     // Insert default branch if not exists
     await connection.execute(`

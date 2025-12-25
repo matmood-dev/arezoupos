@@ -11,6 +11,14 @@ import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineX, HiOutlineCh
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
+// Helper function to get full image URL
+const getImageUrl = (imagePath: string | undefined | null): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const PageContainer = styled.div`
   padding: 20px;
 
@@ -2055,7 +2063,7 @@ const InventoryPage: React.FC = () => {
                   </div>
                   {item.image ? (
                     <ItemImage
-                      src={item.image}
+                      src={getImageUrl(item.image)}
                       alt={item.name}
                       onError={(e) => {
                         console.error('Image failed to load:', item.image, e);
@@ -2105,7 +2113,7 @@ const InventoryPage: React.FC = () => {
                     />
                     {item.image ? (
                       <ListItemImage
-                        src={item.image}
+                        src={getImageUrl(item.image)}
                         alt={item.name}
                         onError={(e) => {
                           console.error('Image failed to load:', item.image, e);

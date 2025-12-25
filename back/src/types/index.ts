@@ -144,9 +144,16 @@ export interface Settings {
   settingid: number;
   shop_name: string;
   shop_logo?: string;
+  shop_email?: string;
+  vat_registration_number?: string;
   currency: string;
   tax_rate: number;
   receipt_footer: string;
+  bank_name?: string;
+  bank_account_name?: string;
+  iban_number?: string;
+  account_number?: string;
+  swift_code?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -154,9 +161,16 @@ export interface Settings {
 export interface UpdateSettingsRequest {
   shop_name?: string;
   shop_logo?: string;
+  shop_email?: string;
+  vat_registration_number?: string;
   currency?: string;
   tax_rate?: number;
   receipt_footer?: string;
+  bank_name?: string;
+  bank_account_name?: string;
+  iban_number?: string;
+  account_number?: string;
+  swift_code?: string;
 }
 
 // Branch types
@@ -165,6 +179,7 @@ export interface Branch {
   name: string;
   address: string;
   phone?: string;
+  cr?: string;
   active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -174,12 +189,17 @@ export interface CreateBranchRequest {
   name: string;
   address: string;
   phone?: string;
+  cr?: string;
   active?: boolean;
 }
 
 export interface UpdateBranchRequest {
   name?: string;
   address?: string;
+  phone?: string;
+  cr?: string;
+  active?: boolean;
+}
   phone?: string;
   active?: boolean;
 }

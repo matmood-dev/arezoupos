@@ -8,6 +8,13 @@ import { useTheme } from '../hooks/useTheme';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+const getImageUrl = (imagePath: string | undefined | null): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const NavbarContainer = styled.div`
   width: 100%;
   max-width: 1200px;
@@ -235,7 +242,7 @@ const Navbar: React.FC<{ onMobileMenu?: () => void; isMobile?: boolean; title?: 
         )}
         <Brand onClick={() => navigate('/')}>
           {settings?.shop_logo ? (
-            <img src={settings.shop_logo} alt="Shop logo" style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover' }} />
+            <img src={getImageUrl(settings.shop_logo)} alt="Shop logo" style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover' }} />
           ) : (
             <Logo>POS</Logo>
           )}

@@ -4,6 +4,13 @@ import { settingsAPI } from '../services/api';
 import type { Settings } from '../services/api';
 import { useTranslation } from 'react-i18next';
 
+const getImageUrl = (imagePath: string | undefined | null): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const FooterContainer = styled.footer<{ $sidebarCollapsed?: boolean; $isMobile?: boolean; $isRtl?: boolean }>`
   background: ${props => props.theme.colors.surface};
   border-top: 1px solid ${props => props.theme.colors.glassBorder};
@@ -86,7 +93,7 @@ const Footer: React.FC<{ sidebarCollapsed?: boolean; isMobile?: boolean }> = ({ 
       <Inner>
         <Left>
           {settings?.shop_logo ? (
-            <img src={settings.shop_logo} alt="logo" style={{ width: 38, height: 38, objectFit: 'cover', borderRadius: 8 }} />
+            <img src={getImageUrl(settings.shop_logo)} alt="logo" style={{ width: 38, height: 38, objectFit: 'cover', borderRadius: 8 }} />
           ) : (
             <LogoSmall>POS</LogoSmall>
           )}

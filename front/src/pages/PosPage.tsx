@@ -8,6 +8,14 @@ import { GlassCard } from '../components/GlassCard';
 import FloatingCart from '../components/FloatingCart';
 import { useTranslation } from 'react-i18next';
 
+// Helper function to get full image URL
+const getImageUrl = (imagePath: string | undefined | null): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const PosContainer = styled.div`
   display: grid;
   grid-template-columns: 1fr;
@@ -325,7 +333,7 @@ const PosPage: React.FC = () => {
                 >
                   <ProductImageContainer>
                     {product.image ? (
-                      <ProductImage src={product.image} alt={product.name} />
+                      <ProductImage src={getImageUrl(product.image)} alt={product.name} />
                     ) : (
                       <div style={{ width: '100%', height: '100%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>{t('pos.no_image')}</div>
                     )}

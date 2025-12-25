@@ -7,6 +7,13 @@ import { useNavigate } from 'react-router-dom';
 import { HiOutlineShoppingCart, HiOutlineTrash, HiX, HiOutlineDocumentText, HiOutlineCurrencyDollar } from 'react-icons/hi';
 import { GlassButton } from './GlassCard';
 
+const getImageUrl = (imagePath: string | undefined | null): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const pop = keyframes`
   from { transform: translateY(12px) scale(.98); opacity: 0; }
   to { transform: translateY(0px) scale(1); opacity: 1; }
@@ -233,7 +240,7 @@ const FloatingCart: React.FC = () => {
             ) : cart.map(item => (
               <Item key={item.product.itemid}>
                 <ItemMeta>
-                  {item.product.image ? <Thumb src={item.product.image} alt={item.product.name} /> : <Thumb src={''} alt={item.product.name} />}
+                  {item.product.image ? <Thumb src={getImageUrl(item.product.image)} alt={item.product.name} /> : <Thumb src={''} alt={item.product.name} />}
                   <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                     <ItemName>{item.product.name}</ItemName>
                     <ItemPrice>

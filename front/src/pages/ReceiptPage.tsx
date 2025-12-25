@@ -6,6 +6,13 @@ import { HiOutlineArrowLeft } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
+const getImageUrl = (imagePath: string | undefined | null): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const PageContainer = styled.div`
   padding: 20px;
 `;
@@ -221,7 +228,7 @@ const ReceiptPage: React.FC = () => {
       <ReceiptWrapper id="receipt">
         {settings?.shop_logo && (
           <div style={{ textAlign: 'center', marginBottom: 12 }}>
-            <img src={settings.shop_logo} alt="logo" style={{ maxWidth: 180, maxHeight: 110, objectFit: 'contain' }} />
+            <img src={getImageUrl(settings.shop_logo)} alt="logo" style={{ maxWidth: 180, maxHeight: 110, objectFit: 'contain' }} />
           </div>
         )}
 

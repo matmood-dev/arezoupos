@@ -18,6 +18,14 @@ const validateSettingsUpdate = (data: UpdateSettingsRequest) => {
     errors.push('Shop logo path must be less than 500 characters');
   }
 
+  if (data.shop_email !== undefined && data.shop_email !== null && data.shop_email !== '' && (typeof data.shop_email !== 'string' || data.shop_email.length > 100)) {
+    errors.push('Shop email must be less than 100 characters');
+  }
+
+  if (data.vat_registration_number !== undefined && data.vat_registration_number !== null && data.vat_registration_number !== '' && (typeof data.vat_registration_number !== 'string' || data.vat_registration_number.length > 50)) {
+    errors.push('VAT registration number must be less than 50 characters');
+  }
+
   if (data.currency !== undefined && (typeof data.currency !== 'string' || data.currency.length < 3 || data.currency.length > 10)) {
     errors.push('Currency must be between 3 and 10 characters');
   }
@@ -31,6 +39,26 @@ const validateSettingsUpdate = (data: UpdateSettingsRequest) => {
 
   if (data.receipt_footer !== undefined && (typeof data.receipt_footer !== 'string' || data.receipt_footer.length > 1000)) {
     errors.push('Receipt footer must be less than 1000 characters');
+  }
+
+  if (data.bank_name !== undefined && data.bank_name !== null && data.bank_name !== '' && (typeof data.bank_name !== 'string' || data.bank_name.length > 255)) {
+    errors.push('Bank name must be less than 255 characters');
+  }
+
+  if (data.bank_account_name !== undefined && data.bank_account_name !== null && data.bank_account_name !== '' && (typeof data.bank_account_name !== 'string' || data.bank_account_name.length > 255)) {
+    errors.push('Bank account name must be less than 255 characters');
+  }
+
+  if (data.iban_number !== undefined && data.iban_number !== null && data.iban_number !== '' && (typeof data.iban_number !== 'string' || data.iban_number.length > 50)) {
+    errors.push('IBAN number must be less than 50 characters');
+  }
+
+  if (data.account_number !== undefined && data.account_number !== null && data.account_number !== '' && (typeof data.account_number !== 'string' || data.account_number.length > 50)) {
+    errors.push('Account number must be less than 50 characters');
+  }
+
+  if (data.swift_code !== undefined && data.swift_code !== null && data.swift_code !== '' && (typeof data.swift_code !== 'string' || data.swift_code.length > 20)) {
+    errors.push('SWIFT code must be less than 20 characters');
   }
 
   return { isEmpty: errors.length === 0, errors };
@@ -49,6 +77,10 @@ const validateBranchCreate = (data: CreateBranchRequest) => {
 
   if (data.phone !== undefined && data.phone !== null && (typeof data.phone !== 'string' || data.phone.length > 20)) {
     errors.push('Phone number must be less than 20 characters');
+  }
+
+  if (data.cr !== undefined && data.cr !== null && data.cr !== '' && (typeof data.cr !== 'string' || data.cr.length > 50)) {
+    errors.push('CR number must be less than 50 characters');
   }
 
   if (data.active !== undefined) {
@@ -81,6 +113,10 @@ const validateBranchUpdate = (data: UpdateBranchRequest) => {
 
   if (data.phone !== undefined && data.phone !== null && (typeof data.phone !== 'string' || data.phone.length > 20)) {
     errors.push('Phone number must be less than 20 characters');
+  }
+
+  if (data.cr !== undefined && data.cr !== null && data.cr !== '' && (typeof data.cr !== 'string' || data.cr.length > 50)) {
+    errors.push('CR number must be less than 50 characters');
   }
 
   if (data.active !== undefined) {
@@ -314,8 +350,8 @@ router.post('/branches', express.json(), authenticateToken, requireAdmin, async 
     })();
 
     const result = await query(
-      'INSERT INTO branches (name, address, phone, active) VALUES (?, ?, ?, ?)',
-      [branchData.name, branchData.address, branchData.phone || null, activeVal]
+      'INSERT INTO branches (name, address, phone, cr, active) VALUES (?, ?, ?, ?, ?)',
+      [branchData.name, branchData.address, branchData.phone || null, branchData.cr || null, activeVal]
     );
 
     // Fetch the created branch
@@ -556,16 +592,12 @@ router.delete('/categories/:id', authenticateToken, requireAdmin, async (req, re
       return;
     }
 
-    // Check if category is being used by items
-    const usageResult = await query('SELECT COUNT(*) as count FROM items WHERE category = ?', [existingResult.rows[0].name]);
-    if (usageResult.rows[0].count > 0) {
-      res.status(409).json({
-        success: false,
-        message: 'Cannot delete category that is being used by items'
-      } as ApiResponse);
-      return;
-    }
+    const categoryName = existingResult.rows[0].name;
 
+    // Update items using this category to "Deleted Category"
+    await query('UPDATE items SET category = ? WHERE category = ?', ['Deleted Category', categoryName]);
+
+    // Delete the category
     await query('DELETE FROM item_categories WHERE categoryid = ?', [categoryId]);
 
     res.json({

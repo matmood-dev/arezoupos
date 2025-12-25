@@ -63,10 +63,10 @@ const upload = multer({
  */
 router.get('/', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category, search } = req.query;
+    const { category, search, includeArchived, archivedOnly } = req.query;
 
     let queryText = `
-      SELECT itemid, name, description, price, category, stock_quantity, image, created_at, updated_at
+      SELECT itemid, name, description, price, category, stock_quantity, image, active, created_at, updated_at
       FROM items
       WHERE 1=1
     `;
@@ -81,6 +81,13 @@ router.get('/', authenticateToken, async (req: Request, res: Response): Promise<
       queryText += ` AND (name LIKE ? OR description LIKE ?)`;
       values.push(`%${search}%`);
       values.push(`%${search}%`);
+    }
+
+    // Filter by archived status
+    if (archivedOnly === 'true') {
+      queryText += ` AND active = false`;
+    } else if (includeArchived !== 'true') {
+      queryText += ` AND active = true`;
     }
 
     queryText += ` ORDER BY name ASC`;
@@ -120,7 +127,7 @@ router.get('/:itemid', authenticateToken, async (req: Request, res: Response): P
     const { itemid } = req.params;
 
     const result = await query(`
-      SELECT itemid, name, description, price, category, stock_quantity, image, created_at, updated_at
+      SELECT itemid, name, description, price, category, stock_quantity, image, active, created_at, updated_at
       FROM items
       WHERE itemid = ?
     `, [itemid]);
@@ -370,12 +377,74 @@ router.put('/:itemid', authenticateToken, requireAdminForDelete, upload.single('
  * @swagger
  * /api/items/{itemid}:
  *   delete:
- *     summary: Delete an item
+ *     summary: Archive an item (soft delete)
  *     tags: [Items]
  *     security:
  *       - bearerAuth: []
  */
 router.delete('/:itemid', authenticateToken, requireAdmin, validateIdParam, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { itemid } = req.params;
+
+    // Archive the item by setting active = false
+    const result = await query(`
+      UPDATE items SET active = false WHERE itemid = ?
+    `, [itemid]);
+
+    res.json({
+      success: true,
+      message: 'Item archived successfully'
+    });
+  } catch (error) {
+    console.error('Archive item error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to archive item'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/items/{itemid}/unarchive:
+ *   put:
+ *     summary: Unarchive an item
+ *     tags: [Items]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.put('/:itemid/unarchive', authenticateToken, requireAdmin, validateIdParam, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { itemid } = req.params;
+
+    // Unarchive the item by setting active = true
+    const result = await query(`
+      UPDATE items SET active = true WHERE itemid = ?
+    `, [itemid]);
+
+    res.json({
+      success: true,
+      message: 'Item unarchived successfully'
+    });
+  } catch (error) {
+    console.error('Unarchive item error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unarchive item'
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/items/{itemid}/permanent:
+ *   delete:
+ *     summary: Permanently delete an item
+ *     tags: [Items]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/:itemid/permanent', authenticateToken, requireAdmin, validateIdParam, async (req: Request, res: Response): Promise<void> => {
   try {
     const { itemid } = req.params;
 
@@ -414,7 +483,7 @@ router.delete('/:itemid', authenticateToken, requireAdmin, validateIdParam, asyn
 
     res.json({
       success: true,
-      message: 'Item deleted successfully'
+      message: 'Item permanently deleted successfully'
     });
   } catch (error) {
     console.error('Delete item error:', error);

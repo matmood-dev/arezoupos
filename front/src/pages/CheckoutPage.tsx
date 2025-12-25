@@ -9,6 +9,13 @@ import { useNavigate } from 'react-router-dom';
 import type { Customer, CreateCustomerRequest, Branch } from '../services/api';
 import { useTranslation } from 'react-i18next';
 
+const getImageUrl = (imagePath: string | undefined | null): string => {
+  if (!imagePath) return '';
+  if (imagePath.startsWith('http')) return imagePath;
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  return `${API_BASE_URL}${imagePath}`;
+};
+
 const CheckoutContainer = styled.div`
   max-width: 1200px;
   margin: 0 auto;
@@ -604,7 +611,7 @@ const CheckoutPage: React.FC = () => {
             <CartItem key={item.product.itemid}>
               <ItemInfo>
                 {item.product.image && (
-                  <ItemImage src={item.product.image} alt={item.product.name} />
+                  <ItemImage src={getImageUrl(item.product.image)} alt={item.product.name} />
                 )}
                 <div>
                   <ItemName>{item.product.name}</ItemName>
