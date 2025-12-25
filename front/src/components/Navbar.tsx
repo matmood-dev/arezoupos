@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, startTransition } from 'react';
 import styled from 'styled-components';
 import { HiOutlineSun, HiOutlineMoon, HiOutlineLogout } from 'react-icons/hi';
 import { settingsAPI } from '../services/api';
@@ -265,7 +265,12 @@ const Navbar: React.FC<{ onMobileMenu?: () => void; isMobile?: boolean; title?: 
           {open && (
             <Dropdown role="menu">
               <DropItem onClick={() => { navigate('/settings'); setOpen(false); }}>{t('sidebar.settings')}</DropItem>
-              <DropItem onClick={() => { logout(); navigate('/login'); }}>
+              <DropItem onClick={() => { 
+                logout(); 
+                startTransition(() => {
+                  navigate('/login');
+                });
+              }}>
                 <HiOutlineLogout /> {t('login.logout', 'Logout')}
               </DropItem>
             </Dropdown>

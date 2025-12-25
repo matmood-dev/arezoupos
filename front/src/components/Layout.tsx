@@ -4,7 +4,7 @@ import { useTheme } from '../hooks/useTheme';
 import { usePermissions } from '../hooks/usePermissions';
 import Sidebar from './Sidebar';
 import type { NavItem } from './Sidebar';
-import { HiCash, HiOutlineCheckCircle, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineCog, HiOutlineChartBar } from 'react-icons/hi';
+import { HiCash, HiOutlineCheckCircle, HiOutlineUserGroup, HiOutlineClipboardList, HiOutlineCog, HiOutlineChartBar, HiOutlineUsers } from 'react-icons/hi';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import { useNavigate } from 'react-router-dom';
@@ -76,7 +76,7 @@ const Layout: React.FC<LayoutProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   useTheme();
-  const { canViewReports } = usePermissions();
+  const { canViewReports, canViewUsers } = usePermissions();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -125,7 +125,7 @@ const Layout: React.FC<LayoutProps> = ({
       icon: <HiOutlineClipboardList />
     },
     ...(canViewReports ? [{ id: 'reports', label: t('sidebar.reports'), icon: <HiOutlineChartBar /> }] : []),
-    // users nav is currently hidden — we rely on permissions when enabling it
+    ...(canViewUsers ? [{ id: 'users', label: t('sidebar.users'), icon: <HiOutlineUsers /> }] : []),
     {
       id: 'settings',
       label: t('sidebar.settings'),
