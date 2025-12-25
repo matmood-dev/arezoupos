@@ -2,7 +2,6 @@ import React, { createContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { authAPI, usersAPI, ApiError } from '../services/api';
 import type { User } from '../services/api';
-import { supabase } from '../services/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -26,22 +25,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper to load user profile from public.users table
+  // Helper to load user profile
   const loadUserProfile = async (userId: string) => {
     console.log('loadUserProfile called for:', userId);
     try {
-      // Create a timeout promise
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), 5000)
-      );
-
-      console.log('Fetching user profile from API...');
-      // Race the API call against the timeout
-      const response = await Promise.race([
-        usersAPI.getById(userId),
-        timeout
-      ]) as any;
-
+      const response = await usersAPI.getById(userId);
       console.log('User profile response:', response);
 
       if (response.success && response.data) {
@@ -49,8 +37,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
-      // If profile load fails, we might want to clear user state or handle it.
-      // For now, we just log it. user remains null.
+      // If profile load fails, clear auth state
+      localStorage.removeItem('token');
+      localStorage.removeItem('userId');
+      setToken(null);
+      setUser(null);
     }
   };
 
@@ -60,19 +51,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initializeAuth = async () => {
       try {
         console.log('Initializing auth...');
-        const { data: { session } } = await supabase.auth.getSession();
+        const storedToken = localStorage.getItem('token');
+        const storedUserId = localStorage.getItem('userId');
 
-        if (session) {
-          console.log('Session found:', session.user.id);
-          setToken(session.access_token);
-          if (session.user) {
-            await loadUserProfile(session.user.id);
-          }
+        if (storedToken && storedUserId) {
+          console.log('Found stored token and user ID');
+          setToken(storedToken);
+          await loadUserProfile(storedUserId);
         } else {
-          console.log('No session found');
+          console.log('No stored credentials found');
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
+        // Clear invalid auth state
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
+        setToken(null);
+        setUser(null);
       } finally {
         if (mounted) {
           console.log('Setting isLoading to false');
@@ -83,37 +78,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state change:', event);
-      if (!mounted) return;
-
-      if (session) {
-        setToken(session.access_token);
-        // We fetch profile on every session change to ensure sync
-        await loadUserProfile(session.user.id);
-      } else {
-        setToken(null);
-        setUser(null);
-      }
-
-      // Ensure loading is false after any auth change
-      setIsLoading(false);
-    });
-
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      // authAPI.login uses supabase.auth.signInWithPassword and also fetches the profile
       const response = await authAPI.login(email, password);
 
       if (response.success && response.data) {
         const { user, token } = response.data;
+        
+        // Store credentials in localStorage
+        localStorage.setItem('token', token);
+        localStorage.setItem('userId', user.userid);
+        
         setUser(user);
         setToken(token);
       } else {
@@ -129,9 +110,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const logout = async () => {
+  const logout = () => {
     try {
-      await supabase.auth.signOut();
+      // Clear localStorage
+      localStorage.removeItem('token');
+      localStorage.removeItem('userId');
+      
       setUser(null);
       setToken(null);
     } catch (error) {

@@ -110,7 +110,7 @@ const LoginPage: React.FC = () => {
   const { t } = useTranslation();
   const { login, isLoading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -119,7 +119,7 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      await login(email, password);
+      await login(username, password);
       // Redirect to POS after successful login
       navigate('/pos', { replace: true });
     } catch (err) {
@@ -140,13 +140,13 @@ const LoginPage: React.FC = () => {
         <Title>{t('login.title')}</Title>
         <Form onSubmit={handleSubmit}>
           <FormGroup>
-            <Label htmlFor="email">{t('login.email') || 'Email'}</Label>
+            <Label htmlFor="username">{t('login.username') || 'Username'}</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder={t('login.email_placeholder') || 'Enter your email'}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="username"
+              type="text"
+              placeholder={t('login.username_placeholder') || 'Enter your username'}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </FormGroup>
