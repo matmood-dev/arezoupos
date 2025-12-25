@@ -12,8 +12,6 @@ import {
   HiOutlineTag,
   HiOutlinePencil,
   HiOutlineTrash,
-  HiOutlineArchive,
-  HiOutlineReply,
   HiOutlineChevronDown,
 } from "react-icons/hi";
 import toast from "react-hot-toast";
@@ -490,7 +488,7 @@ const BranchStatus = styled.span<{ $active: boolean }>`
   ${(props) =>
     props.$active
       ? `
-    background: rgba(34, 197, 94, 0.1);
+    background: rgba(34, 197, 94, 0.2);
     color: #22c55e;
   `
       : `
@@ -670,7 +668,6 @@ const SettingsPage: React.FC = () => {
   const [editingBranchId, setEditingBranchId] = useState<number | null>(null);
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [showArchivedBranches, setShowArchivedBranches] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
 
   // Load settings data on component mount
@@ -705,9 +702,7 @@ const SettingsPage: React.FC = () => {
 
         // Load branches only for admin users (branch management is admin-only)
         if (isAdmin) {
-          const branchesResponse = await settingsAPI.getBranches(
-            showArchivedBranches ? { archivedOnly: true } : {}
-          );
+          const branchesResponse = await settingsAPI.getBranches();
           if (branchesResponse.success && branchesResponse.data) {
             setFormData((prev) => ({
               ...prev,
@@ -722,7 +717,7 @@ const SettingsPage: React.FC = () => {
     };
 
     loadSettings();
-  }, [isAdmin, t, showArchivedBranches]);
+  }, [isAdmin, t]);
 
   const {
     categories,
@@ -828,32 +823,16 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleUnarchiveBranch = async (branch: Branch) => {
-    try {
-      const resp = await settingsAPI.unarchiveBranch(branch.branchid);
-      if (resp.success) {
-        setFormData((prev) => ({
-          ...prev,
-          branches: prev.branches.filter((b) => b.branchid !== branch.branchid),
-        }));
-        toast.success(t("settings.branch_unarchived"));
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error(t("settings.unarchive_branch_error"));
-    }
-  };
-
   const confirmDeleteBranch = (branch: Branch) => {
     toast((toastInstance) => (
       <div>
         <div style={{ marginBottom: "8px", fontWeight: "500" }}>
-          {t("settings.archive_branch_confirm_title", { name: branch.name })}
+          Delete Branch: {branch.name}?
         </div>
         <div
           style={{ fontSize: "14px", color: "#64748b", marginBottom: "12px" }}
         >
-          {t("settings.archive_confirm_message")}
+          This action cannot be undone.
         </div>
         <div
           style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
@@ -862,7 +841,7 @@ const SettingsPage: React.FC = () => {
             onClick={() => toast.dismiss(toastInstance.id)}
             style={{ padding: "6px 12px" }}
           >
-            {t("common.cancel")}
+            Cancel
           </button>
           <button
             onClick={async () => {
@@ -876,20 +855,20 @@ const SettingsPage: React.FC = () => {
                       (b) => b.branchid !== branch.branchid
                     ),
                   }));
-                  toast.success(t("settings.branch_archived"));
+                  toast.success("Branch deleted successfully");
                 }
               } catch (err) {
                 console.error(err);
-                toast.error(t("settings.archive_branch_error"));
+                toast.error("Failed to delete branch");
               }
             }}
             style={{
               padding: "6px 12px",
-              background: "#f59e0b",
+              background: "#ef4444",
               color: "white",
             }}
           >
-            {t("settings.archive")}
+            Delete
           </button>
         </div>
       </div>
@@ -1389,25 +1368,16 @@ const SettingsPage: React.FC = () => {
                           >
                             <IconButton
                               onClick={() => openEditBranch(branch)}
-                              title={t("settings.edit_branch")}
+                              title="Edit Branch"
                             >
                               <HiOutlinePencil />
                             </IconButton>
-                            {branch.active ? (
-                              <IconButton
-                                onClick={() => confirmDeleteBranch(branch)}
-                                title={t("settings.archive_branch")}
-                              >
-                                <HiOutlineArchive />
-                              </IconButton>
-                            ) : (
-                              <IconButton
-                                onClick={() => handleUnarchiveBranch(branch)}
-                                title={t("settings.unarchive_branch")}
-                              >
-                                <HiOutlineReply />
-                              </IconButton>
-                            )}
+                            <IconButton
+                              onClick={() => confirmDeleteBranch(branch)}
+                              title="Delete Branch"
+                            >
+                              <HiOutlineTrash />
+                            </IconButton>
                           </div>
                         </BranchHeader>
                         <BranchDetails>
@@ -1427,32 +1397,10 @@ const SettingsPage: React.FC = () => {
                     ))}
                   </BranchesList>
 
-                  <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
-                  >
-                    <button
-                      onClick={() =>
-                        setShowArchivedBranches(!showArchivedBranches)
-                      }
-                      style={{
-                        padding: "8px 16px",
-                        border: "1px solid #d1d5db",
-                        background: showArchivedBranches ? "#3b82f6" : "white",
-                        color: showArchivedBranches ? "white" : "#374151",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                      }}
-                    >
-                      {showArchivedBranches
-                        ? t("settings.hide_archived_branches")
-                        : t("settings.show_archived_branches")}
-                    </button>
-                    <AddButton onClick={openAddBranch}>
-                      <HiOutlineOfficeBuilding />
-                      {t("settings.add_branch")}
-                    </AddButton>
-                  </div>
+                  <AddButton onClick={openAddBranch}>
+                    <HiOutlineOfficeBuilding />
+                    {t("settings.add_branch")}
+                  </AddButton>
                 </Section>
 
                 <Section>
