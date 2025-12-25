@@ -14,6 +14,7 @@ import itemRoutes from './routes/items.js';
 import customerRoutes from './routes/customers.js';
 import orderRoutes from './routes/orders.js';
 import settingsRoutes from './routes/settings.js';
+import reportsRoutes from './routes/reports.js';
 // Import database connection
 import { connectDB } from './config/database.js';
 // Load environment variables
@@ -44,14 +45,6 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 })); // Enable CORS
 app.use(limiter); // Rate limiting
-// Parse JSON bodies, but skip for multipart/form-data
-app.use((req, res, next) => {
-    const contentType = req.headers['content-type'] || '';
-    if (contentType.includes('multipart/form-data')) {
-        return next();
-    }
-    express.json({ limit: '10mb' })(req, res, next);
-});
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
@@ -82,6 +75,39 @@ app.use('/api/items', itemRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/reports', reportsRoutes);
+// Receipt health check (puppeteer)
+app.get('/api/receipt/health', async (req, res) => {
+    try {
+        const puppeteer = await import('puppeteer');
+        const execPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+        const launchOptions = { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] };
+        if (execPath)
+            launchOptions.executablePath = execPath;
+        let browser = null;
+        try {
+            browser = await puppeteer.launch(launchOptions);
+            const page = await browser.newPage();
+            await page.setContent('<html><body><p>OK</p></body></html>');
+            await page.close();
+            await browser.close();
+        }
+        catch (err) {
+            console.error('Puppeteer health check failed', err);
+            if (browser)
+                try {
+                    await browser.close();
+                }
+                catch { }
+            return res.status(500).json({ success: false, message: 'Puppeteer failed to start' });
+        }
+        return res.json({ success: true, message: 'Puppeteer is available' });
+    }
+    catch (err) {
+        console.error('Puppeteer import or health check failed', err);
+        return res.status(500).json({ success: false, message: 'Puppeteer module not available' });
+    }
+});
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({

@@ -3,6 +3,7 @@ import { query } from '../config/database.js';
 import { authenticateToken, requireAdmin, requireAdminForDelete } from '../middleware/auth.js';
 import { validateCustomerCreation, validateCustomerUpdate, validateIdParam, handleValidationErrors } from '../validators/index.js';
 const router = express.Router();
+router.use(express.json());
 /**
  * @swagger
  * /api/customers:
@@ -392,6 +393,12 @@ router.put('/:customerid', authenticateToken, requireAdminForDelete, validateIdP
 router.delete('/:customerid', authenticateToken, requireAdmin, validateIdParam, async (req, res) => {
     try {
         const { customerid } = req.params;
+        // Update orders to show "Deleted Customer" instead of leaving orphaned references
+        await query(`
+      UPDATE orders 
+      SET customerid = NULL 
+      WHERE customerid = ?
+    `, [customerid]);
         const result = await query(`
       DELETE FROM customers
       WHERE customerid = ?

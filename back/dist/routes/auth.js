@@ -2,6 +2,8 @@ import express from 'express';
 import { authenticateUser, generateToken, generateRefreshToken, createDefaultAdmin } from '../utils/auth.js';
 import { validateLogin, handleValidationErrors } from '../validators/index.js';
 const router = express.Router();
+// Parse JSON bodies for auth routes
+router.use(express.json({ limit: '10mb' }));
 /**
  * @swagger
  * /api/auth/login:

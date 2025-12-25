@@ -1,8 +1,10 @@
 import express from 'express';
+import jwt from 'jsonwebtoken';
 import { query, getClient } from '../config/database.js';
 import { authenticateToken, requireAdmin, requireAdminForDelete } from '../middleware/auth.js';
 import { validateOrderCreation, validateOrderUpdate, validateIdParam, handleValidationErrors } from '../validators/index.js';
 const router = express.Router();
+router.use(express.json());
 /**
  * @swagger
  * /api/orders:
@@ -35,33 +37,49 @@ const router = express.Router();
  */
 router.get('/', authenticateToken, requireAdminForDelete, async (req, res) => {
     try {
-        // Get orders with customer info
+        // Get orders with customer and branch info
         const ordersResult = await query(`
-      SELECT o.orderid, o.customerid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone
+      SELECT o.orderid, o.customerid, o.branchid, o.userid, o.total_amount, o.status, o.created_at, o.updated_at,
+             COALESCE(c.name, 'Deleted Customer') as customer_name, 
+             c.email as customer_email, 
+             c.phone as customer_phone,
+             b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr,
+             u.username as user_name, u.email as user_email
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
+      LEFT JOIN branches b ON o.branchid = b.branchid
+      LEFT JOIN users u ON o.userid = u.userid
       ORDER BY o.created_at DESC
     `);
+        const rows = Array.isArray(ordersResult.rows) ? ordersResult.rows : [];
+        console.log('DEBUG: fetched orders rows count =', rows.length);
         // Get order items for each order
-        const ordersWithItems = await Promise.all(ordersResult.rows.map(async (order) => {
-            const itemsResult = await query(`
-          SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+        let ordersWithItems;
+        try {
+            ordersWithItems = await Promise.all(ordersResult.rows.map(async (order) => {
+                const itemsResult = await query(`
+          SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
           FROM order_items oi
-          JOIN items i ON oi.itemid = i.itemid
+          LEFT JOIN items i ON oi.itemid = i.itemid
           WHERE oi.orderid = ?
         `, [order.orderid]);
-            return {
-                ...order,
-                items: itemsResult.rows.map((item) => ({
-                    itemid: item.itemid,
-                    quantity: item.quantity,
-                    price: parseFloat(item.price),
-                    name: item.name,
-                    category: item.category
-                }))
-            };
-        }));
+                return {
+                    ...order,
+                    items: itemsResult.rows.map((item) => ({
+                        itemid: item.itemid,
+                        quantity: item.quantity,
+                        price: parseFloat(item.price),
+                        name: item.name,
+                        category: item.category,
+                        note: item.note
+                    }))
+                };
+            }));
+        }
+        catch (err) {
+            console.error('Error mapping ordersWithItems:', err instanceof Error ? err.message : err);
+            throw err;
+        }
         res.json({
             success: true,
             data: ordersWithItems
@@ -119,12 +137,18 @@ router.get('/', authenticateToken, requireAdminForDelete, async (req, res) => {
 router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdParam, async (req, res) => {
     try {
         const { orderid } = req.params;
-        // Get order with customer info
+        // Get order with customer and branch info
         const orderResult = await query(`
-      SELECT o.orderid, o.customerid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone
+      SELECT o.orderid, o.customerid, o.branchid, o.userid, o.total_amount, o.status, o.created_at, o.updated_at,
+             COALESCE(c.name, 'Deleted Customer') as customer_name, 
+             c.email as customer_email, 
+             c.phone as customer_phone,
+             b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr,
+             u.username as user_name, u.email as user_email
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
+      LEFT JOIN branches b ON o.branchid = b.branchid
+      LEFT JOIN users u ON o.userid = u.userid
       WHERE o.orderid = ?
     `, [orderid]);
         if (orderResult.rows.length === 0) {
@@ -136,9 +160,9 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
         }
         // Get order items
         const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
       FROM order_items oi
-      JOIN items i ON oi.itemid = i.itemid
+      LEFT JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
     `, [orderid]);
         const order = {
@@ -148,7 +172,8 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
                 quantity: item.quantity,
                 price: parseFloat(item.price),
                 name: item.name,
-                category: item.category
+                category: item.category,
+                note: item.note
             }))
         };
         res.json({
@@ -162,6 +187,302 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
             success: false,
             message: 'Failed to retrieve order'
         });
+    }
+});
+/**
+ * Generate HTML receipt for an order
+ */
+router.get('/:orderid/receipt', authenticateToken, validateIdParam, async (req, res) => {
+    try {
+        const { orderid } = req.params;
+        // Get order with customer and branch info
+        const orderResult = await query(`
+      SELECT o.orderid, o.customerid, o.branchid, o.userid, o.total_amount, o.status, o.created_at, o.updated_at,
+             COALESCE(c.name, 'Deleted Customer') as customer_name, 
+             c.email as customer_email, 
+             c.phone as customer_phone,
+             b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr,
+             u.username as user_name, u.email as user_email
+      FROM orders o
+      LEFT JOIN customers c ON o.customerid = c.customerid
+      LEFT JOIN branches b ON o.branchid = b.branchid
+      LEFT JOIN users u ON o.userid = u.userid
+      WHERE o.orderid = ?
+    `, [orderid]);
+        if (orderResult.rows.length === 0) {
+            res.status(404).json({ success: false, message: 'Order not found' });
+            return;
+        }
+        const itemsResult = await query(`
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
+      FROM order_items oi
+      LEFT JOIN items i ON oi.itemid = i.itemid
+      WHERE oi.orderid = ?
+    `, [orderid]);
+        // Fetch settings to render footer and shop name
+        const settingsResult = await query(`SELECT shop_name, shop_logo, receipt_footer, currency FROM settings LIMIT 1`);
+        const settings = (settingsResult.rows && settingsResult.rows[0]) ? settingsResult.rows[0] : { shop_name: 'Shop', receipt_footer: '', shop_logo: null };
+        const order = {
+            ...orderResult.rows[0],
+            items: itemsResult.rows.map((item) => ({
+                itemid: item.itemid,
+                quantity: item.quantity,
+                price: parseFloat(item.price),
+                name: item.name,
+                category: item.category,
+                note: item.note
+            }))
+        };
+        // Build a simple HTML receipt
+        const htmlItems = order.items.map((it) => `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #eee;">
+        <div style="flex:1">${it.name} × ${it.quantity}</div>
+        <div style="min-width:80px;text-align:right">${(Number(it.price) * it.quantity).toFixed(3)}</div>
+      </div>`).join('');
+        // Build absolute logo URL if shop_logo exists
+        const logoUrl = settings.shop_logo ? `${req.protocol}://${req.get('host')}${settings.shop_logo}` : null;
+        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Receipt ${order.orderid}</title></head><body>
+      <div id="receipt" style="max-width:400px;margin:20px auto;padding:20px;background:#fff;border:1px solid #eee;border-radius:8px;">
+        ${logoUrl ? `<div style="text-align:center;margin-bottom:10px"><img src="${logoUrl}" alt="Logo" style="max-width:150px;max-height:90px;object-fit:contain;"/></div>` : ''}
+        <h2 style="margin:0 0 8px 0;text-align:center">${settings.shop_name || 'Shop'}</h2>
+        <div style="text-align:center;color:#6b7280;margin-bottom:12px">${new Date(order.created_at).toLocaleString()}</div>
+        <div style="font-weight:700;display:flex;justify-content:space-between;margin-bottom:8px;"> <div>Order #${order.orderid}</div> <div>${order.status}</div> </div>
+        ${htmlItems}
+        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:12px"> <div>Total</div> <div>${Number(order.total_amount).toFixed(3)}</div> </div>
+        <div style="text-align:center;color:#6b7280;margin-top:12px">${settings.receipt_footer || ''}</div>
+      </div>
+    </body></html>`;
+        res.set('Content-Type', 'text/html');
+        res.send(html);
+    }
+    catch (error) {
+        console.error('Get order receipt error:', error);
+        res.status(500).json({ success: false, message: 'Failed to generate receipt' });
+    }
+});
+// Create a short-lived download token for a PDF receipt
+router.post('/:orderid/receipt/token', authenticateToken, validateIdParam, async (req, res) => {
+    try {
+        const { orderid } = req.params;
+        // Validate order exists
+        const orderResult = await query('SELECT orderid FROM orders WHERE orderid = ?', [orderid]);
+        if (!orderResult.rows || orderResult.rows.length === 0) {
+            res.status(404).json({ success: false, message: 'Order not found' });
+            return;
+        }
+        const secret = process.env.JWT_SECRET || 'fallback_secret';
+        // Token lifetime: 5 minutes by default (configurable)
+        const expiresIn = process.env.RECEIPT_TOKEN_TTL || '5m';
+        const token = jwt.sign({ type: 'download', orderid: Number(orderid) }, secret, { expiresIn });
+        const host = `${req.protocol}://${req.get('host')}`;
+        const url = `${host}/api/orders/${orderid}/receipt.pdf?download_token=${encodeURIComponent(token)}`;
+        const redirectUrl = `${host}/api/orders/${orderid}/receipt/redirect?download_token=${encodeURIComponent(token)}`;
+        res.json({ success: true, data: { token, url, redirectUrl } });
+    }
+    catch (error) {
+        console.error('Create receipt token error:', error);
+        res.status(500).json({ success: false, message: 'Failed to create receipt token' });
+    }
+});
+// Redirect page for compatibility (useful for extension-safe navigation)
+router.get('/:orderid/receipt/redirect', validateIdParam, async (req, res) => {
+    try {
+        const { orderid } = req.params;
+        const token = String(req.query.download_token || '');
+        if (!token) {
+            res.status(401).json({ success: false, message: 'Download token required' });
+            return;
+        }
+        const secret = process.env.JWT_SECRET || 'fallback_secret';
+        try {
+            const payload = jwt.verify(token, secret);
+            if (payload.type !== 'download' || Number(payload.orderid) !== Number(orderid)) {
+                res.status(401).json({ success: false, message: 'Invalid download token' });
+                return;
+            }
+        }
+        catch (err) {
+            res.status(401).json({ success: false, message: 'Invalid or expired download token' });
+            return;
+        }
+        // Redirect to the actual PDF URL
+        const host = `${req.protocol}://${req.get('host')}`;
+        const pdfUrl = `${host}/api/orders/${orderid}/receipt.pdf?download_token=${encodeURIComponent(token)}`;
+        res.redirect(302, pdfUrl);
+    }
+    catch (error) {
+        console.error('Receipt redirect error:', error);
+        res.status(500).json({ success: false, message: 'Failed to redirect to receipt' });
+    }
+});
+/**
+ * @swagger
+ * /api/orders/{orderid}/receipt.pdf:
+ *   get:
+ *     summary: Get a PDF receipt for an order
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderid
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Order ID
+ *     responses:
+ *       200:
+ *         description: PDF file of the receipt
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+// Generate PDF receipt
+router.get('/:orderid/receipt.pdf', validateIdParam, async (req, res) => {
+    try {
+        const { orderid } = req.params;
+        // Reuse the same HTML generation logic
+        const orderResult = await query(`
+      SELECT o.orderid, o.customerid, o.total_amount, o.status, o.created_at, o.updated_at,
+             COALESCE(c.name, 'Deleted Customer') as customer_name, c.email as customer_email, c.phone as customer_phone
+      FROM orders o
+      LEFT JOIN customers c ON o.customerid = c.customerid
+      WHERE o.orderid = ?
+    `, [orderid]);
+        if (orderResult.rows.length === 0) {
+            res.status(404).json({ success: false, message: 'Order not found' });
+            return;
+        }
+        const itemsResult = await query(`
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
+      FROM order_items oi
+      LEFT JOIN items i ON oi.itemid = i.itemid
+      WHERE oi.orderid = ?
+    `, [orderid]);
+        const settingsResult = await query(`SELECT shop_name, shop_logo, receipt_footer, currency FROM settings LIMIT 1`);
+        const settings = (settingsResult.rows && settingsResult.rows[0]) ? settingsResult.rows[0] : { shop_name: 'Shop', receipt_footer: '', shop_logo: null };
+        const order = {
+            ...orderResult.rows[0],
+            items: itemsResult.rows.map((item) => ({
+                itemid: item.itemid,
+                quantity: item.quantity,
+                price: parseFloat(item.price),
+                name: item.name,
+                category: item.category,
+                note: item.note
+            }))
+        };
+        // Build HTML including absolute logo URL
+        const logoUrl = settings.shop_logo ? `${req.protocol}://${req.get('host')}${settings.shop_logo}` : null;
+        const htmlItems = order.items.map((it) => `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #eee;">
+        <div style="flex:1">${it.name} × ${it.quantity}</div>
+        <div style="min-width:80px;text-align:right">${(Number(it.price) * it.quantity).toFixed(3)}</div>
+      </div>`).join('');
+        const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Receipt ${order.orderid}</title></head><body>
+      <div id="receipt" style="max-width:400px;margin:20px auto;padding:20px;background:#fff;border:1px solid #eee;border-radius:8px;">
+        ${logoUrl ? `<div style="text-align:center;margin-bottom:10px"><img src="${logoUrl}" alt="Logo" style="max-width:150px;max-height:90px;object-fit:contain;"/></div>` : ''}
+        <h2 style="margin:0 0 8px 0;text-align:center">${settings.shop_name || 'Shop'}</h2>
+        <div style="text-align:center;color:#6b7280;margin-bottom:12px">${new Date(order.created_at).toLocaleString()}</div>
+        <div style="font-weight:700;display:flex;justify-content:space-between;margin-bottom:8px;"> <div>Order #${order.orderid}</div> <div>${order.status}</div> </div>
+        ${htmlItems}
+        <div style="display:flex;justify-content:space-between;font-weight:700;margin-top:12px"> <div>Total</div> <div>${Number(order.total_amount).toFixed(3)}</div> </div>
+        <div style="text-align:center;color:#6b7280;margin-top:12px">${settings.receipt_footer || ''}</div>
+      </div>
+    </body></html>`;
+        // Generate PDF with puppeteer
+        // Allow overriding executable path for environments where Chromium isn't bundled (e.g., Docker images, CI)
+        let browser = null;
+        // Authenticate request via one of: Authorization header OR download_token query parameter OR access_token query parameter
+        try {
+            let jwtToken = null;
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const tokenPart = authHeader.split(' ')[1];
+                jwtToken = tokenPart || null;
+            }
+            else if (req.query && req.query.access_token) {
+                jwtToken = String(req.query.access_token);
+            }
+            const downloadToken = req.query && req.query.download_token ? String(req.query.download_token) : null;
+            const secret = process.env.JWT_SECRET || 'fallback_secret';
+            let valid = false;
+            if (jwtToken) {
+                try {
+                    jwt.verify(jwtToken, secret);
+                    valid = true;
+                }
+                catch (e) {
+                    // Not valid; continue to check download token
+                }
+            }
+            if (!valid && downloadToken) {
+                try {
+                    const payload = jwt.verify(downloadToken, secret);
+                    if (payload.type === 'download' && Number(payload.orderid) === Number(orderid)) {
+                        valid = true;
+                    }
+                }
+                catch (e) {
+                    // invalid
+                    valid = false;
+                }
+            }
+            if (!valid) {
+                res.status(401).json({ success: false, message: 'Access token required or download token invalid' });
+                return;
+            }
+            const puppeteer = await import('puppeteer');
+            const launchOptions = {
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
+            };
+            const execPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+            if (execPath) {
+                launchOptions.executablePath = execPath;
+            }
+            try {
+                browser = await puppeteer.launch(launchOptions);
+            }
+            catch (launchError) {
+                console.error('Puppeteer launch failed:', launchError);
+                res.status(500).json({ success: false, message: 'Failed to launch headless browser for PDF generation', error: launchError instanceof Error ? launchError.message : String(launchError) });
+                return;
+            }
+            const page = await browser.newPage();
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' } });
+            // Log for diagnostics
+            console.log(`Generated PDF for order ${order.orderid} (size: ${pdfBuffer.length} bytes)`);
+            // Set headers explicitly so download managers can correctly detect the content size
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=receipt-${order.orderid}.pdf`);
+            res.setHeader('Content-Length', String(pdfBuffer.length));
+            res.setHeader('Accept-Ranges', 'bytes');
+            res.status(200).send(pdfBuffer);
+        }
+        finally {
+            try {
+                if (browser)
+                    await browser.close();
+            }
+            catch (closeErr) {
+                console.error('Error closing browser:', closeErr);
+            }
+        }
+    }
+    catch (error) {
+        // Log full error stack for debugging, but avoid leaking stack in production
+        if (error instanceof Error) {
+            console.error('Get order PDF receipt error:', error.stack || error.message);
+        }
+        else {
+            console.error('Get order PDF receipt error:', error);
+        }
+        const devError = process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : 'Failed to generate receipt PDF';
+        res.status(500).json({ success: false, message: devError });
     }
 });
 /**
@@ -223,9 +544,10 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
  */
 router.post('/', authenticateToken, validateOrderCreation, handleValidationErrors, async (req, res) => {
     const client = await getClient();
+    let committed = false;
     try {
-        // await client.execute('START TRANSACTION');
-        const { customerid, items } = req.body;
+        await client.beginTransaction();
+        const { customerid, branchid, items } = req.body;
         // Validate items exist and have sufficient stock
         for (const item of items) {
             const [itemRows] = await client.execute(`
@@ -235,7 +557,7 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
       `, [item.itemid]);
             const rows = itemRows;
             if (rows.length === 0) {
-                // await client.execute('ROLLBACK');
+                await client.rollback();
                 res.status(400).json({
                     success: false,
                     message: `Item with ID ${item.itemid} not found`
@@ -243,7 +565,7 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
                 return;
             }
             if (rows[0].stock_quantity < item.quantity) {
-                // await client.execute('ROLLBACK');
+                await client.rollback();
                 res.status(400).json({
                     success: false,
                     message: `Insufficient stock for item: ${rows[0].name}`
@@ -255,33 +577,43 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
         let totalAmount = 0;
         const orderItemsWithPrices = [];
         for (const item of items) {
-            const [itemRows] = await client.execute(`
-        SELECT price FROM items WHERE itemid = ?
-      `, [item.itemid]);
-            const rows = itemRows;
-            const price = parseFloat(rows[0].price);
+            // Use the price from the request if provided (custom price), otherwise fetch from database
+            let price;
+            if (item.price !== undefined && item.price !== null) {
+                // Custom price provided from frontend
+                price = typeof item.price === 'number' ? item.price : parseFloat(String(item.price));
+            }
+            else {
+                // Fetch default price from database
+                const [itemRows] = await client.execute(`
+          SELECT price FROM items WHERE itemid = ?
+        `, [item.itemid]);
+                const rows = itemRows;
+                price = parseFloat(rows[0].price);
+            }
             totalAmount += price * item.quantity;
             orderItemsWithPrices.push({
                 itemid: item.itemid,
                 quantity: item.quantity,
-                price: price
+                price: price,
+                ...(item.note && { note: item.note })
             });
         }
         // Create order
         await client.execute(`
-      INSERT INTO orders (customerid, total_amount, status)
-      VALUES (?, ?, 'pending')
-    `, [customerid, totalAmount]);
+      INSERT INTO orders (customerid, branchid, userid, total_amount, status)
+      VALUES (?, ?, ?, ?, 'pending')
+    `, [customerid, branchid, req.user?.userid || null, totalAmount]);
         // Get the inserted order ID
         const [orderIdResult] = await client.execute('SELECT LAST_INSERT_ID() as orderid');
         const orderIdRows = orderIdResult;
         const newOrderId = orderIdRows[0].orderid;
-        // Create order items and update stock
+        // Create order items and update stock (reserve stock for pending order)
         for (const item of orderItemsWithPrices) {
             await client.execute(`
-        INSERT INTO order_items (orderid, itemid, quantity, price)
-        VALUES (?, ?, ?, ?)
-      `, [newOrderId, item.itemid, item.quantity, item.price]);
+        INSERT INTO order_items (orderid, itemid, quantity, price, note)
+        VALUES (?, ?, ?, ?, ?)
+      `, [newOrderId, item.itemid, item.quantity, item.price, item.note || null]);
             // Update stock quantity
             await client.execute(`
         UPDATE items
@@ -289,7 +621,8 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
         WHERE itemid = ?
       `, [item.quantity, item.itemid]);
         }
-        // await client.execute('COMMIT');
+        await client.commit();
+        committed = true;
         // Get complete order with items for response
         const [orderRows] = await client.execute(`
       SELECT orderid, customerid, total_amount, status, created_at, updated_at
@@ -308,7 +641,14 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
         });
     }
     catch (error) {
-        // await client.execute('ROLLBACK');
+        try {
+            if (!committed) {
+                await client.rollback();
+            }
+        }
+        catch (rollbackError) {
+            console.error('Rollback error on create order:', rollbackError);
+        }
         console.error('Create order error:', error);
         res.status(500).json({
             success: false,
@@ -377,32 +717,87 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
  *               $ref: '#/components/schemas/Error'
  */
 router.put('/:orderid', authenticateToken, requireAdminForDelete, validateIdParam, validateOrderUpdate, handleValidationErrors, async (req, res) => {
+    let client = null;
+    let committed = false;
     try {
         const { orderid } = req.params;
         const { status } = req.body;
-        const result = await query(`
+        client = await getClient();
+        // Begin transaction using the dedicated API (prevent prepared statement issues)
+        await client.beginTransaction();
+        // Get current order status and items
+        const [orderRowsPrev] = await client.execute(`
+      SELECT status FROM orders WHERE orderid = ?
+    `, [orderid]);
+        const prevOrderRows = orderRowsPrev;
+        if (prevOrderRows.length === 0) {
+            await client.rollback();
+            res.status(404).json({ success: false, message: 'Order not found' });
+            client.release();
+            return;
+        }
+        const prevStatus = prevOrderRows[0].status;
+        // Update status
+        const [updateRes] = await client.execute(`
       UPDATE orders
       SET status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE orderid = ?
     `, [status, orderid]);
-        if (result.rows.affectedRows === 0) {
-            res.status(404).json({
-                success: false,
-                message: 'Order not found'
-            });
+        const updateResAny = updateRes;
+        if (updateResAny.affectedRows === 0) {
+            await client.rollback();
+            res.status(404).json({ success: false, message: 'Order not found' });
+            client.release();
             return;
         }
+        // If transitioning to cancelled from pending/completed — restore stock
+        if (status === 'cancelled' && prevStatus !== 'cancelled') {
+            // fetch items
+            const [itemsRows] = await client.execute(`SELECT itemid, quantity FROM order_items WHERE orderid = ?`, [orderid]);
+            const itemsData = itemsRows;
+            for (const it of itemsData) {
+                await client.execute(`
+          UPDATE items SET stock_quantity = stock_quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE itemid = ?
+        `, [it.quantity, it.itemid]);
+            }
+        }
+        // If transitioning from cancelled back to pending/completed — reserve stock again
+        if ((prevStatus === 'cancelled') && (status === 'pending' || status === 'completed')) {
+            // Check if stock is available for each item and reduce
+            const [itemsRows] = await client.execute(`SELECT itemid, quantity FROM order_items WHERE orderid = ?`, [orderid]);
+            const itemsData = itemsRows;
+            for (const it of itemsData) {
+                const [stockRows] = await client.execute(`SELECT stock_quantity FROM items WHERE itemid = ?`, [it.itemid]);
+                const stock = stockRows[0]?.stock_quantity ?? 0;
+                if (stock < it.quantity) {
+                    // Insufficient stock to re-reserve
+                    await client.rollback();
+                    res.status(400).json({ success: false, message: `Insufficient stock for item id ${it.itemid} to set status to ${status}` });
+                    client.release();
+                    return;
+                }
+            }
+            for (const it of itemsData) {
+                await client.execute(`
+          UPDATE items SET stock_quantity = stock_quantity - ?, updated_at = CURRENT_TIMESTAMP WHERE itemid = ?
+        `, [it.quantity, it.itemid]);
+            }
+        }
+        // If transitioning to completed — no action needed if stock already reserved
+        // Commit transaction
+        await client.commit();
+        committed = true;
         // Get updated order
-        const [orderRows] = await (await getClient()).execute(`
+        const [orderRows] = await client.execute(`
       SELECT orderid, customerid, total_amount, status, created_at, updated_at
       FROM orders
       WHERE orderid = ?
     `, [orderid]);
         // Get order items for complete response
         const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
       FROM order_items oi
-      JOIN items i ON oi.itemid = i.itemid
+      LEFT JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
     `, [orderid]);
         const orderData = orderRows;
@@ -413,7 +808,8 @@ router.put('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
                 quantity: item.quantity,
                 price: parseFloat(item.price),
                 name: item.name,
-                category: item.category
+                category: item.category,
+                note: item.note
             }))
         };
         res.json({
@@ -428,6 +824,19 @@ router.put('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
             success: false,
             message: 'Failed to update order'
         });
+    }
+    finally {
+        if (client) {
+            try {
+                if (!committed) {
+                    await client.rollback();
+                }
+            }
+            catch (rollbackError) {
+                console.error('Rollback error:', rollbackError);
+            }
+            client.release();
+        }
     }
 });
 /**

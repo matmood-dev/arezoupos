@@ -58,9 +58,9 @@ const upload = multer({
  */
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { category, search } = req.query;
+        const { category, search, includeArchived, archivedOnly } = req.query;
         let queryText = `
-      SELECT itemid, name, description, price, category, stock_quantity, image, created_at, updated_at
+      SELECT itemid, name, description, price, category, stock_quantity, image, active, created_at, updated_at
       FROM items
       WHERE 1=1
     `;
@@ -73,6 +73,13 @@ router.get('/', authenticateToken, async (req, res) => {
             queryText += ` AND (name LIKE ? OR description LIKE ?)`;
             values.push(`%${search}%`);
             values.push(`%${search}%`);
+        }
+        // Filter by archived status
+        if (archivedOnly === 'true') {
+            queryText += ` AND active = false`;
+        }
+        else if (includeArchived !== 'true') {
+            queryText += ` AND active = true`;
         }
         queryText += ` ORDER BY name ASC`;
         const result = await query(queryText, values);
@@ -108,7 +115,7 @@ router.get('/:itemid', authenticateToken, async (req, res) => {
     try {
         const { itemid } = req.params;
         const result = await query(`
-      SELECT itemid, name, description, price, category, stock_quantity, image, created_at, updated_at
+      SELECT itemid, name, description, price, category, stock_quantity, image, active, created_at, updated_at
       FROM items
       WHERE itemid = ?
     `, [itemid]);
@@ -144,8 +151,37 @@ router.get('/:itemid', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, requireAdminForDelete, upload.single('image'), async (req, res) => {
     try {
         const { name, description, price, category, stock_quantity } = req.body;
+        // If categoryid provided, map it to a category name to avoid storing free text
+        let finalCategory = category;
+        const providedCategoryId = req.body.categoryid;
+        if (providedCategoryId !== undefined && providedCategoryId !== null) {
+            const catId = parseInt(providedCategoryId.toString());
+            if (!isNaN(catId)) {
+                const catRes = await query('SELECT name FROM item_categories WHERE categoryid = ?', [catId]);
+                if (catRes.rows.length > 0) {
+                    finalCategory = catRes.rows[0].name;
+                }
+                else {
+                    res.status(400).json({ success: false, message: 'Invalid category selected' });
+                    return;
+                }
+            }
+        }
+        else if (typeof category === 'string' && /^\d+$/.test(category)) {
+            // fallback if category is a numeric string
+            const catId = parseInt(category);
+            const catRes = await query('SELECT name FROM item_categories WHERE categoryid = ?', [catId]);
+            if (catRes.rows.length > 0)
+                finalCategory = catRes.rows[0].name;
+        }
         // Validate required fields
-        if (!name || !price || !category || stock_quantity === undefined) {
+        // Allow category to be specified via `categoryid` (id) instead of `category` (name)
+        const providedCategoryIdCheck = req.body.categoryid;
+        const hasCategory = (category && category !== '') || (providedCategoryIdCheck !== undefined && providedCategoryIdCheck !== null && providedCategoryIdCheck !== '');
+        // Price or stock_quantity can be '0' — treat empty/null/undefined as missing only
+        const priceMissing = price === undefined || price === null;
+        const stockMissing = stock_quantity === undefined || stock_quantity === null;
+        if (!name || priceMissing || !hasCategory || stockMissing) {
             res.status(400).json({
                 success: false,
                 message: 'Missing required fields'
@@ -157,7 +193,7 @@ router.post('/', authenticateToken, requireAdminForDelete, upload.single('image'
         const result = await query(`
       INSERT INTO items (name, description, price, category, stock_quantity, image)
       VALUES (?, ?, ?, ?, ?, ?)
-    `, [name, description || null, parseFloat(price.toString()), category, parseInt(stock_quantity.toString()), imagePath]);
+    `, [name, description || null, parseFloat(price.toString()), finalCategory, parseInt(stock_quantity.toString()), imagePath]);
         // Get the inserted item
         const itemResult = await query(`
       SELECT itemid, name, description, price, category, stock_quantity, image, created_at, updated_at
@@ -191,6 +227,28 @@ router.put('/:itemid', authenticateToken, requireAdminForDelete, upload.single('
     try {
         const { itemid } = req.params;
         const { name, description, price, category, stock_quantity } = req.body;
+        // Map categoryid to name if provided
+        let finalCategory = category;
+        const providedCategoryId = req.body.categoryid;
+        if (providedCategoryId !== undefined && providedCategoryId !== null) {
+            const catId = parseInt(providedCategoryId.toString());
+            if (!isNaN(catId)) {
+                const catRes = await query('SELECT name FROM item_categories WHERE categoryid = ?', [catId]);
+                if (catRes.rows.length > 0) {
+                    finalCategory = catRes.rows[0].name;
+                }
+                else {
+                    res.status(400).json({ success: false, message: 'Invalid category selected' });
+                    return;
+                }
+            }
+        }
+        else if (typeof category === 'string' && /^\d+$/.test(category)) {
+            const catId = parseInt(category);
+            const catRes = await query('SELECT name FROM item_categories WHERE categoryid = ?', [catId]);
+            if (catRes.rows.length > 0)
+                finalCategory = catRes.rows[0].name;
+        }
         // Get the current item to check for existing image
         const currentItemResult = await query(`
       SELECT image FROM items WHERE itemid = ?
@@ -217,9 +275,9 @@ router.put('/:itemid', authenticateToken, requireAdminForDelete, upload.single('
             updates.push(`price = ?`);
             values.push(price);
         }
-        if (category !== undefined) {
+        if (category !== undefined || providedCategoryId !== undefined) {
             updates.push(`category = ?`);
-            values.push(category);
+            values.push(finalCategory);
         }
         if (stock_quantity !== undefined) {
             updates.push(`stock_quantity = ?`);
@@ -286,12 +344,85 @@ router.put('/:itemid', authenticateToken, requireAdminForDelete, upload.single('
  * @swagger
  * /api/items/{itemid}:
  *   delete:
- *     summary: Delete an item
+ *     summary: Delete an item permanently
  *     tags: [Items]
  *     security:
  *       - bearerAuth: []
  */
 router.delete('/:itemid', authenticateToken, requireAdmin, validateIdParam, async (req, res) => {
+    try {
+        const { itemid } = req.params;
+        // Check if item exists and get image path
+        const itemResult = await query('SELECT image FROM items WHERE itemid = ?', [itemid]);
+        if (!itemResult.rows || itemResult.rows.length === 0) {
+            res.status(404).json({ success: false, message: 'Item not found' });
+            return;
+        }
+        const itemImage = itemResult.rows[0].image;
+        // Delete image file if exists
+        if (itemImage) {
+            try {
+                const imagePath = path.join(process.cwd(), 'uploads', path.basename(itemImage));
+                await fs.unlink(imagePath);
+            }
+            catch (error) {
+                console.log('Could not delete image file:', error instanceof Error ? error.message : String(error));
+            }
+        }
+        // Delete the item from database
+        const result = await query('DELETE FROM items WHERE itemid = ?', [itemid]);
+        res.json({
+            success: true,
+            message: 'Item deleted successfully'
+        });
+    }
+    catch (error) {
+        console.error('Archive item error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to archive item'
+        });
+    }
+});
+/**
+ * @swagger
+ * /api/items/{itemid}/unarchive:
+ *   put:
+ *     summary: Unarchive an item
+ *     tags: [Items]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.put('/:itemid/unarchive', authenticateToken, requireAdmin, validateIdParam, async (req, res) => {
+    try {
+        const { itemid } = req.params;
+        // Unarchive the item by setting active = true
+        const result = await query(`
+      UPDATE items SET active = true WHERE itemid = ?
+    `, [itemid]);
+        res.json({
+            success: true,
+            message: 'Item unarchived successfully'
+        });
+    }
+    catch (error) {
+        console.error('Unarchive item error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to unarchive item'
+        });
+    }
+});
+/**
+ * @swagger
+ * /api/items/{itemid}/permanent:
+ *   delete:
+ *     summary: Permanently delete an item
+ *     tags: [Items]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.delete('/:itemid/permanent', authenticateToken, requireAdmin, validateIdParam, async (req, res) => {
     try {
         const { itemid } = req.params;
         // First, get the item to check for an associated image
@@ -325,7 +456,7 @@ router.delete('/:itemid', authenticateToken, requireAdmin, validateIdParam, asyn
     `, [itemid]);
         res.json({
             success: true,
-            message: 'Item deleted successfully'
+            message: 'Item permanently deleted successfully'
         });
     }
     catch (error) {

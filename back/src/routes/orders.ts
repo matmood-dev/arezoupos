@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import jwt from 'jsonwebtoken';
 import { query, getClient } from '../config/database.js';
 import { authenticateToken, requireAdmin, requireAdminForDelete } from '../middleware/auth.js';
 import { validateOrderCreation, validateOrderUpdate, validateIdParam, handleValidationErrors } from '../validators/index.js';
@@ -296,10 +295,10 @@ router.post('/:orderid/receipt/token', authenticateToken, validateIdParam, async
       return;
     }
 
-    const secret = process.env.JWT_SECRET || 'fallback_secret';
+    const secret: string = process.env.JWT_SECRET || 'fallback_secret';
     // Token lifetime: 5 minutes by default (configurable)
     const expiresIn = process.env.RECEIPT_TOKEN_TTL || '5m';
-    const token = jwt.sign({ type: 'download', orderid: Number(orderid) }, secret, { expiresIn });
+    const token = jwt.sign({ type: 'download', orderid: Number(orderid) }, secret, { expiresIn } as any);
 
     const host = `${req.protocol}://${req.get('host')}`;
     const url = `${host}/api/orders/${orderid}/receipt.pdf?download_token=${encodeURIComponent(token)}`;
@@ -438,7 +437,8 @@ router.get('/:orderid/receipt.pdf', validateIdParam, async (req: Request, res: R
       let jwtToken: string | null = null;
       const authHeader = req.headers.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
-        jwtToken = authHeader.split(' ')[1];
+        const tokenPart = authHeader.split(' ')[1];
+        jwtToken = tokenPart || null;
       } else if (req.query && req.query.access_token) {
         jwtToken = String(req.query.access_token);
       }
@@ -645,7 +645,7 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
         itemid: item.itemid,
         quantity: item.quantity,
         price: price,
-        note: item.note
+        ...(item.note && { note: item.note })
       });
     }
 

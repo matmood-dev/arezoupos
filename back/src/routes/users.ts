@@ -302,7 +302,7 @@ router.put('/:userid', authenticateToken, requireAdminOrSelf, validateIdParam, v
     // If password is being updated, verify current password (unless admin updating another user)
     if (password !== undefined) {
       const requestingUserId = (req as any).user?.userid;
-      const isUpdatingSelf = requestingUserId === parseInt(userid);
+      const isUpdatingSelf = requestingUserId === (userid ? parseInt(userid) : null);
 
       if (isUpdatingSelf && !currentPassword) {
         res.status(400).json({

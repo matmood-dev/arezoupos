@@ -193,8 +193,8 @@ router.post('/', authenticateToken, requireAdminForDelete, upload.single('image'
     const hasCategory = (category && category !== '') || (providedCategoryIdCheck !== undefined && providedCategoryIdCheck !== null && providedCategoryIdCheck !== '');
 
     // Price or stock_quantity can be '0' — treat empty/null/undefined as missing only
-    const priceMissing = price === undefined || price === null || price === '';
-    const stockMissing = stock_quantity === undefined || stock_quantity === null || stock_quantity === '';
+    const priceMissing = price === undefined || price === null;
+    const stockMissing = stock_quantity === undefined || stock_quantity === null;
 
     if (!name || priceMissing || !hasCategory || stockMissing) {
       res.status(400).json({

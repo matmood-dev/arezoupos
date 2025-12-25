@@ -81,18 +81,24 @@ export interface OrderItem {
     itemid: number;
     quantity: number;
     price: number;
+    note?: string;
 }
 export interface Order {
     orderid: number;
     customerid?: number;
+    branchid?: number;
+    userid?: number;
     items: OrderItem[];
     total_amount: number;
     status: 'pending' | 'completed' | 'cancelled';
     created_at: Date;
     updated_at: Date;
+    user_name?: string;
+    user_email?: string;
 }
 export interface CreateOrderRequest {
     customerid?: number;
+    branchid?: number;
     items: OrderItem[];
 }
 export interface UpdateOrderRequest {
@@ -116,24 +122,39 @@ export interface Settings {
     settingid: number;
     shop_name: string;
     shop_logo?: string;
+    shop_email?: string;
+    vat_registration_number?: string;
     currency: string;
     tax_rate: number;
     receipt_footer: string;
+    bank_name?: string;
+    bank_account_name?: string;
+    iban_number?: string;
+    account_number?: string;
+    swift_code?: string;
     created_at: Date;
     updated_at: Date;
 }
 export interface UpdateSettingsRequest {
     shop_name?: string;
     shop_logo?: string;
+    shop_email?: string;
+    vat_registration_number?: string;
     currency?: string;
     tax_rate?: number;
     receipt_footer?: string;
+    bank_name?: string;
+    bank_account_name?: string;
+    iban_number?: string;
+    account_number?: string;
+    swift_code?: string;
 }
 export interface Branch {
     branchid: number;
     name: string;
     address: string;
     phone?: string;
+    cr?: string;
     active: boolean;
     created_at: Date;
     updated_at: Date;
@@ -142,12 +163,14 @@ export interface CreateBranchRequest {
     name: string;
     address: string;
     phone?: string;
+    cr?: string;
     active?: boolean;
 }
 export interface UpdateBranchRequest {
     name?: string;
     address?: string;
     phone?: string;
+    cr?: string;
     active?: boolean;
 }
 export interface ItemCategory {

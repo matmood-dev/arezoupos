@@ -207,9 +207,6 @@ export interface UpdateBranchRequest {
   cr?: string;
   active?: boolean;
 }
-  phone?: string;
-  active?: boolean;
-}
 
 // Item Category types
 export interface ItemCategory {

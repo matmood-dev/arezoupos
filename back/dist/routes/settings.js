@@ -13,6 +13,12 @@ const validateSettingsUpdate = (data) => {
     if (data.shop_logo !== undefined && (typeof data.shop_logo !== 'string' || data.shop_logo.length > 500)) {
         errors.push('Shop logo path must be less than 500 characters');
     }
+    if (data.shop_email !== undefined && data.shop_email !== null && data.shop_email !== '' && (typeof data.shop_email !== 'string' || data.shop_email.length > 100)) {
+        errors.push('Shop email must be less than 100 characters');
+    }
+    if (data.vat_registration_number !== undefined && data.vat_registration_number !== null && data.vat_registration_number !== '' && (typeof data.vat_registration_number !== 'string' || data.vat_registration_number.length > 50)) {
+        errors.push('VAT registration number must be less than 50 characters');
+    }
     if (data.currency !== undefined && (typeof data.currency !== 'string' || data.currency.length < 3 || data.currency.length > 10)) {
         errors.push('Currency must be between 3 and 10 characters');
     }
@@ -24,6 +30,21 @@ const validateSettingsUpdate = (data) => {
     }
     if (data.receipt_footer !== undefined && (typeof data.receipt_footer !== 'string' || data.receipt_footer.length > 1000)) {
         errors.push('Receipt footer must be less than 1000 characters');
+    }
+    if (data.bank_name !== undefined && data.bank_name !== null && data.bank_name !== '' && (typeof data.bank_name !== 'string' || data.bank_name.length > 255)) {
+        errors.push('Bank name must be less than 255 characters');
+    }
+    if (data.bank_account_name !== undefined && data.bank_account_name !== null && data.bank_account_name !== '' && (typeof data.bank_account_name !== 'string' || data.bank_account_name.length > 255)) {
+        errors.push('Bank account name must be less than 255 characters');
+    }
+    if (data.iban_number !== undefined && data.iban_number !== null && data.iban_number !== '' && (typeof data.iban_number !== 'string' || data.iban_number.length > 50)) {
+        errors.push('IBAN number must be less than 50 characters');
+    }
+    if (data.account_number !== undefined && data.account_number !== null && data.account_number !== '' && (typeof data.account_number !== 'string' || data.account_number.length > 50)) {
+        errors.push('Account number must be less than 50 characters');
+    }
+    if (data.swift_code !== undefined && data.swift_code !== null && data.swift_code !== '' && (typeof data.swift_code !== 'string' || data.swift_code.length > 20)) {
+        errors.push('SWIFT code must be less than 20 characters');
     }
     return { isEmpty: errors.length === 0, errors };
 };
@@ -38,8 +59,24 @@ const validateBranchCreate = (data) => {
     if (data.phone !== undefined && data.phone !== null && (typeof data.phone !== 'string' || data.phone.length > 20)) {
         errors.push('Phone number must be less than 20 characters');
     }
-    if (data.active !== undefined && typeof data.active !== 'boolean') {
-        errors.push('Active status must be a boolean');
+    if (data.cr !== undefined && data.cr !== null && data.cr !== '' && (typeof data.cr !== 'string' || data.cr.length > 50)) {
+        errors.push('CR number must be less than 50 characters');
+    }
+    if (data.active !== undefined) {
+        // Accept boolean values or string/number representations that can be coerced
+        const val = data.active;
+        if (typeof val === 'boolean') {
+            // OK
+        }
+        else if (typeof val === 'string' && (val === 'true' || val === 'false' || val === '1' || val === '0')) {
+            // OK: will coerce later
+        }
+        else if (typeof val === 'number' && (val === 0 || val === 1)) {
+            // OK: will coerce later
+        }
+        else {
+            errors.push('Active status must be a boolean');
+        }
     }
     return { isEmpty: errors.length === 0, errors };
 };
@@ -54,8 +91,24 @@ const validateBranchUpdate = (data) => {
     if (data.phone !== undefined && data.phone !== null && (typeof data.phone !== 'string' || data.phone.length > 20)) {
         errors.push('Phone number must be less than 20 characters');
     }
-    if (data.active !== undefined && typeof data.active !== 'boolean') {
-        errors.push('Active status must be a boolean');
+    if (data.cr !== undefined && data.cr !== null && data.cr !== '' && (typeof data.cr !== 'string' || data.cr.length > 50)) {
+        errors.push('CR number must be less than 50 characters');
+    }
+    if (data.active !== undefined) {
+        // Accept boolean or string/number that can be coerced to boolean
+        const val = data.active;
+        if (typeof val === 'boolean') {
+            // OK
+        }
+        else if (typeof val === 'string' && (val === 'true' || val === 'false' || val === '1' || val === '0')) {
+            // OK
+        }
+        else if (typeof val === 'number' && (val === 0 || val === 1)) {
+            // OK
+        }
+        else {
+            errors.push('Active status must be a boolean');
+        }
     }
     return { isEmpty: errors.length === 0, errors };
 };
@@ -105,7 +158,8 @@ catch (error) {
     console.log('Upload directory already exists or could not be created');
 }
 // Get settings
-router.get('/', authenticateToken, requireAdmin, async (req, res) => {
+// Allow any authenticated user to read settings (non-admins can view, but only admins can edit)
+router.get('/', authenticateToken, async (req, res) => {
     try {
         const result = await query('SELECT * FROM settings WHERE settingid = 1');
         const settings = result.rows[0];
@@ -130,16 +184,11 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
     }
 });
 // Update settings
-router.put('/', upload.any(), authenticateToken, requireAdmin, async (req, res) => {
+router.put('/', express.json(), upload.any(), authenticateToken, requireAdmin, async (req, res) => {
     try {
-        console.log('Request body:', req.body);
-        console.log('Request files:', req.files);
-        console.log('Body keys:', Object.keys(req.body || {}));
         const updateData = req.body || {};
-        console.log('updateData:', updateData);
         // Validate input
         const validation = validateSettingsUpdate(updateData);
-        console.log('Validation result:', validation);
         if (!validation.isEmpty) {
             res.status(400).json({
                 success: false,
@@ -174,7 +223,6 @@ router.put('/', upload.any(), authenticateToken, requireAdmin, async (req, res) 
                 try {
                     const oldLogoPath = path.join(UPLOAD_DIR, path.basename(currentLogo));
                     await fs.unlink(oldLogoPath);
-                    console.log('Deleted old logo:', oldLogoPath);
                 }
                 catch (error) {
                     console.log('Could not delete old logo:', error instanceof Error ? error.message : String(error));
@@ -213,8 +261,8 @@ router.put('/', upload.any(), authenticateToken, requireAdmin, async (req, res) 
         });
     }
 });
-// Get branches
-router.get('/branches', authenticateToken, requireAdmin, async (req, res) => {
+// Get branches (readable by all authenticated users)
+router.get('/branches', authenticateToken, async (req, res) => {
     try {
         const result = await query('SELECT * FROM branches ORDER BY name');
         const branches = result.rows;
@@ -245,7 +293,17 @@ router.post('/branches', express.json(), authenticateToken, requireAdmin, async 
             });
             return;
         }
-        const result = await query('INSERT INTO branches (name, address, phone, active) VALUES (?, ?, ?, ?)', [branchData.name, branchData.address, branchData.phone || null, branchData.active ?? true]);
+        const activeVal = (() => {
+            const v = branchData.active;
+            if (typeof v === 'boolean')
+                return v;
+            if (typeof v === 'string')
+                return v === 'true' || v === '1';
+            if (typeof v === 'number')
+                return v === 1;
+            return true;
+        })();
+        const result = await query('INSERT INTO branches (name, address, phone, cr, active) VALUES (?, ?, ?, ?, ?)', [branchData.name, branchData.address, branchData.phone || null, branchData.cr || null, activeVal]);
         // Fetch the created branch
         const newBranchResult = await query('SELECT * FROM branches WHERE branchid = ?', [result.rows.insertId]);
         const newBranch = newBranchResult.rows[0];
@@ -306,8 +364,19 @@ router.put('/branches/:id', express.json(), authenticateToken, requireAdmin, asy
         const values = [];
         Object.entries(updateData).forEach(([key, value]) => {
             if (value !== undefined) {
+                // Coerce 'active' to boolean if necessary
+                let processedValue = value;
+                if (key === 'active') {
+                    const v = value;
+                    if (typeof v === 'boolean')
+                        processedValue = v;
+                    else if (typeof v === 'string')
+                        processedValue = (v === 'true' || v === '1');
+                    else if (typeof v === 'number')
+                        processedValue = (v === 1);
+                }
                 updates.push(`${key} = ?`);
-                values.push(value);
+                values.push(processedValue);
             }
         });
         if (updates.length === 0) {
@@ -375,8 +444,8 @@ router.delete('/branches/:id', authenticateToken, requireAdmin, async (req, res)
         });
     }
 });
-// Get categories
-router.get('/categories', authenticateToken, requireAdmin, async (req, res) => {
+// Get categories (readable by all authenticated users)
+router.get('/categories', authenticateToken, async (req, res) => {
     try {
         const result = await query('SELECT * FROM item_categories ORDER BY name');
         const categories = result.rows;
@@ -452,15 +521,10 @@ router.delete('/categories/:id', authenticateToken, requireAdmin, async (req, re
             });
             return;
         }
-        // Check if category is being used by items
-        const usageResult = await query('SELECT COUNT(*) as count FROM items WHERE category = ?', [existingResult.rows[0].name]);
-        if (usageResult.rows[0].count > 0) {
-            res.status(409).json({
-                success: false,
-                message: 'Cannot delete category that is being used by items'
-            });
-            return;
-        }
+        const categoryName = existingResult.rows[0].name;
+        // Update items using this category to "Deleted Category"
+        await query('UPDATE items SET category = ? WHERE category = ?', ['Deleted Category', categoryName]);
+        // Delete the category
         await query('DELETE FROM item_categories WHERE categoryid = ?', [categoryId]);
         res.json({
             success: true,
