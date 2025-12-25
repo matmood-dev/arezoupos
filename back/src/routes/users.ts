@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { query } from '../config/database.js';
 import { authenticateToken, requireAdmin, requireAdminOrSelf } from '../middleware/auth.js';
-import { hashPassword } from '../utils/auth.js';
+import { hashPassword, verifyPassword } from '../utils/auth.js';
 import { validateUserCreation, validateUserUpdate, validateIdParam, handleValidationErrors } from '../validators/index.js';
 import { User, CreateUserRequest, UpdateUserRequest, ApiResponse } from '../types/index.js';
 
@@ -297,7 +297,44 @@ router.post('/', authenticateToken, requireAdmin, validateUserCreation, handleVa
 router.put('/:userid', authenticateToken, requireAdminOrSelf, validateIdParam, validateUserUpdate, handleValidationErrors, async (req: Request, res: Response): Promise<void> => {
   try {
     const { userid } = req.params;
-    const { username, email, role, password }: UpdateUserRequest = req.body;
+    const { username, email, role, password, currentPassword }: UpdateUserRequest & { currentPassword?: string } = req.body;
+
+    // If password is being updated, verify current password (unless admin updating another user)
+    if (password !== undefined) {
+      const requestingUserId = (req as any).user?.userid;
+      const isUpdatingSelf = requestingUserId === parseInt(userid);
+
+      if (isUpdatingSelf && !currentPassword) {
+        res.status(400).json({
+          success: false,
+          message: 'Current password is required to update password'
+        });
+        return;
+      }
+
+      if (isUpdatingSelf) {
+        // Get user's current password hash
+        const userResult = await query('SELECT password FROM users WHERE userid = ?', [userid]);
+        if (userResult.rows.length === 0) {
+          res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
+          return;
+        }
+
+        const currentPasswordHash = userResult.rows[0].password;
+        const isValidPassword = await verifyPassword(currentPassword!, currentPasswordHash);
+
+        if (!isValidPassword) {
+          res.status(401).json({
+            success: false,
+            message: 'Current password is incorrect'
+          });
+          return;
+        }
+      }
+    }
 
     // Build dynamic update query
     const updates: string[] = [];

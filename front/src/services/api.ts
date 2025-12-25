@@ -473,6 +473,7 @@ export interface UpdateUserRequest {
   email?: string;
   role?: 'admin' | 'cashier';
   password?: string;
+  currentPassword?: string;
 }
 
 export interface CreateItemRequest {

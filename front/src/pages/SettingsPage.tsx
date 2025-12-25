@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { useTheme } from "../hooks/useTheme";
 import { usePermissions } from "../hooks/usePermissions";
+import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/Button";
 import {
   HiOutlineSun,
@@ -13,9 +14,12 @@ import {
   HiOutlinePencil,
   HiOutlineTrash,
   HiOutlineChevronDown,
+  HiOutlineUser,
+  HiOutlineMail,
+  HiOutlineLockClosed,
 } from "react-icons/hi";
 import toast from "react-hot-toast";
-import { settingsAPI } from "../services/api";
+import { settingsAPI, usersAPI } from "../services/api";
 import type { UpdateSettingsRequest } from "../services/api";
 import useCategories from "../hooks/useCategories";
 import type { Branch, ItemCategory } from "../services/api";
@@ -626,14 +630,15 @@ const ModalActions = styled.div`
   margin-top: 20px;
 `;
 
-type SettingsSection = "appearance" | "system";
+type SettingsSection = "profile" | "appearance" | "system";
 
 const SettingsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { theme, setMode } = useTheme();
   const { isAdmin } = usePermissions();
+  const { user } = useAuth();
   const [activeSection, setActiveSection] =
-    useState<SettingsSection>("appearance");
+    useState<SettingsSection>("profile");
   const [saving, setSaving] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -669,6 +674,17 @@ const SettingsPage: React.FC = () => {
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [bankOpen, setBankOpen] = useState(false);
+
+  // Profile form state
+  const [profileForm, setProfileForm] = useState({
+    email: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+    avatar: null as File | null,
+  });
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [updatingProfile, setUpdatingProfile] = useState(false);
 
   // Load settings data on component mount
   useEffect(() => {
@@ -729,6 +745,82 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     setFormData((prev) => ({ ...prev, itemCategories: categories || [] }));
   }, [categories]);
+
+  // Load user profile data
+  useEffect(() => {
+    if (user) {
+      setProfileForm((prev) => ({
+        ...prev,
+        email: user.email || "",
+      }));
+    }
+  }, [user]);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProfileForm({ ...profileForm, avatar: file });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    if (!user) return;
+
+    try {
+      setUpdatingProfile(true);
+
+      // Update email if changed
+      if (profileForm.email && profileForm.email !== user.email) {
+        await usersAPI.update(user.userid.toString(), {
+          email: profileForm.email,
+        });
+      }
+
+      // Update password if provided
+      if (profileForm.newPassword) {
+        if (!profileForm.currentPassword) {
+          toast.error(t("settings.current_password_required"));
+          setUpdatingProfile(false);
+          return;
+        }
+        if (profileForm.newPassword !== profileForm.confirmPassword) {
+          toast.error(t("settings.password_mismatch"));
+          setUpdatingProfile(false);
+          return;
+        }
+        if (profileForm.newPassword.length < 6) {
+          toast.error(t("settings.password_too_short"));
+          setUpdatingProfile(false);
+          return;
+        }
+
+        await usersAPI.update(user.userid.toString(), {
+          password: profileForm.newPassword,
+          currentPassword: profileForm.currentPassword,
+        });
+
+        // Clear password fields
+        setProfileForm((prev) => ({
+          ...prev,
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        }));
+      }
+
+      toast.success(t("settings.profile_updated"));
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast.error(t("settings.profile_update_error"));
+    } finally {
+      setUpdatingProfile(false);
+    }
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -1047,6 +1139,11 @@ const SettingsPage: React.FC = () => {
 
   const sections = [
     {
+      id: "profile" as SettingsSection,
+      label: t("settings.profile"),
+      icon: HiOutlineUser,
+    },
+    {
       id: "appearance" as SettingsSection,
       label: t("settings.appearance"),
       icon: HiOutlineSun,
@@ -1085,6 +1182,123 @@ const SettingsPage: React.FC = () => {
           </TabList>
 
           <TabContent>
+            {activeSection === "profile" && (
+              <>
+                <Section>
+                  <SectionTitle>
+                    <HiOutlineUser />
+                    {t("settings.profile_information")}
+                  </SectionTitle>
+
+                  <FormGroup>
+                    <Label htmlFor="username">{t("settings.username")}</Label>
+                    <Input
+                      id="username"
+                      name="username"
+                      type="text"
+                      value={user?.username || ""}
+                      disabled
+                      style={{ opacity: 0.6, cursor: "not-allowed" }}
+                    />
+                    <div style={{ fontSize: "0.875rem", color: "#64748b", marginTop: "4px" }}>
+                      {t("settings.username_cannot_change")}
+                    </div>
+                  </FormGroup>
+
+                  <FormGroup>
+                    <Label htmlFor="profileEmail">
+                      <HiOutlineMail style={{ display: "inline", marginRight: "8px" }} />
+                      {t("settings.email")}
+                    </Label>
+                    <Input
+                      id="profileEmail"
+                      name="profileEmail"
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, email: e.target.value })
+                      }
+                      placeholder={t("settings.email_placeholder")}
+                    />
+                  </FormGroup>
+
+                  <FormGroup>
+                    <Label htmlFor="role">{t("settings.role")}</Label>
+                    <Input
+                      id="role"
+                      name="role"
+                      type="text"
+                      value={user?.role || ""}
+                      disabled
+                      style={{ opacity: 0.6, cursor: "not-allowed", textTransform: "capitalize" }}
+                    />
+                  </FormGroup>
+                </Section>
+
+                <Section>
+                  <SectionTitle>
+                    <HiOutlineLockClosed />
+                    {t("settings.change_password")}
+                  </SectionTitle>
+
+                  <FormGroup>
+                    <Label htmlFor="currentPassword">
+                      {t("settings.current_password")}
+                    </Label>
+                    <Input
+                      id="currentPassword"
+                      name="currentPassword"
+                      type="password"
+                      value={profileForm.currentPassword}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, currentPassword: e.target.value })
+                      }
+                      placeholder={t("settings.current_password_placeholder")}
+                    />
+                  </FormGroup>
+
+                  <FormGroup>
+                    <Label htmlFor="newPassword">
+                      {t("settings.new_password")}
+                    </Label>
+                    <Input
+                      id="newPassword"
+                      name="newPassword"
+                      type="password"
+                      value={profileForm.newPassword}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, newPassword: e.target.value })
+                      }
+                      placeholder={t("settings.new_password_placeholder")}
+                    />
+                  </FormGroup>
+
+                  <FormGroup>
+                    <Label htmlFor="confirmPassword">
+                      {t("settings.confirm_password")}
+                    </Label>
+                    <Input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type="password"
+                      value={profileForm.confirmPassword}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, confirmPassword: e.target.value })
+                      }
+                      placeholder={t("settings.confirm_password_placeholder")}
+                    />
+                  </FormGroup>
+
+                  <div style={{ marginTop: "24px" }}>
+                    <SaveButton onClick={handleProfileUpdate} disabled={updatingProfile}>
+                      <HiOutlineSave />
+                      {updatingProfile ? t("settings.updating") : t("settings.update_profile")}
+                    </SaveButton>
+                  </div>
+                </Section>
+              </>
+            )}
+
             {activeSection === "appearance" && (
               <Section>
                 <SectionTitle>
