@@ -22,6 +22,11 @@ export interface CartItem {
 export interface Order {
   orderid: number;
   customerid?: number;
+  branchid?: number;
+  branch_name?: string;
+  branch_address?: string;
+  branch_phone?: string;
+  branch_cr?: string;
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;

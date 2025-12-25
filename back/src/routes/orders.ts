@@ -42,12 +42,14 @@ router.use(express.json());
  */
 router.get('/', authenticateToken, requireAdminForDelete, async (req: Request, res: Response): Promise<void> => {
   try {
-    // Get orders with customer info
+    // Get orders with customer and branch info
     const ordersResult = await query(`
-      SELECT o.orderid, o.customerid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone
+      SELECT o.orderid, o.customerid, o.branchid, o.total_amount, o.status, o.created_at, o.updated_at,
+             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
+      LEFT JOIN branches b ON o.branchid = b.branchid
       ORDER BY o.created_at DESC
     `);
 
@@ -141,12 +143,14 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
   try {
     const { orderid } = req.params;
 
-    // Get order with customer info
+    // Get order with customer and branch info
     const orderResult = await query(`
-      SELECT o.orderid, o.customerid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone
+      SELECT o.orderid, o.customerid, o.branchid, o.total_amount, o.status, o.created_at, o.updated_at,
+             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
+      LEFT JOIN branches b ON o.branchid = b.branchid
       WHERE o.orderid = ?
     `, [orderid]);
 
@@ -197,12 +201,14 @@ router.get('/:orderid/receipt', authenticateToken, validateIdParam, async (req: 
   try {
     const { orderid } = req.params;
 
-    // Get order with customer info
+    // Get order with customer and branch info
     const orderResult = await query(`
-      SELECT o.orderid, o.customerid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone
+      SELECT o.orderid, o.customerid, o.branchid, o.total_amount, o.status, o.created_at, o.updated_at,
+             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
+      LEFT JOIN branches b ON o.branchid = b.branchid
       WHERE o.orderid = ?
     `, [orderid]);
 
@@ -566,7 +572,7 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
   try {
     await client.beginTransaction();
 
-    const { customerid, items }: CreateOrderRequest = req.body;
+    const { customerid, branchid, items }: CreateOrderRequest = req.body;
 
     // Validate items exist and have sufficient stock
     for (const item of items) {
@@ -618,9 +624,9 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
 
     // Create order
     await client.execute(`
-      INSERT INTO orders (customerid, total_amount, status)
-      VALUES (?, ?, 'pending')
-    `, [customerid, totalAmount]);
+      INSERT INTO orders (customerid, branchid, total_amount, status)
+      VALUES (?, ?, ?, 'pending')
+    `, [customerid, branchid, totalAmount]);
 
     // Get the inserted order ID
     const [orderIdResult] = await client.execute('SELECT LAST_INSERT_ID() as orderid');

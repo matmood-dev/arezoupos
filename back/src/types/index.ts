@@ -103,6 +103,7 @@ export interface OrderItem {
 export interface Order {
   orderid: number;
   customerid?: number;
+  branchid?: number;
   items: OrderItem[];
   total_amount: number;
   status: 'pending' | 'completed' | 'cancelled';
@@ -112,6 +113,7 @@ export interface Order {
 
 export interface CreateOrderRequest {
   customerid?: number;
+  branchid?: number;
   items: OrderItem[];
 }
 

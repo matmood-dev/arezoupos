@@ -165,13 +165,39 @@ const createTables = async (): Promise<void> => {
       CREATE TABLE IF NOT EXISTS orders (
         orderid INT AUTO_INCREMENT PRIMARY KEY,
         customerid INT,
+        branchid INT,
         total_amount DECIMAL(10,2) NOT NULL CHECK (total_amount >= 0),
         status ENUM('pending', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (customerid) REFERENCES customers(customerid)
+        FOREIGN KEY (customerid) REFERENCES customers(customerid),
+        FOREIGN KEY (branchid) REFERENCES branches(branchid)
       )
     `);
+
+    // Add branchid column to existing orders table if it doesn't exist
+    try {
+      const [columns] = await connection.execute(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'orders' AND COLUMN_NAME = 'branchid'
+      `, [process.env.DB_NAME || 'pos_system']);
+
+      const columnRows = columns as any[];
+      if (columnRows.length === 0) {
+        await connection.execute(`
+          ALTER TABLE orders ADD COLUMN branchid INT AFTER customerid
+        `);
+        // Add foreign key constraint
+        await connection.execute(`
+          ALTER TABLE orders ADD CONSTRAINT fk_orders_branch 
+          FOREIGN KEY (branchid) REFERENCES branches(branchid)
+        `);
+        console.log('✅ Added branchid column to orders table');
+      }
+    } catch (error) {
+      console.log('⚠️  Could not check/add branchid column to orders:', error instanceof Error ? error.message : 'Unknown error');
+    }
 
     // Create order_items table
     await connection.execute(`
