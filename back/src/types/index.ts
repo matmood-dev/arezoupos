@@ -98,6 +98,7 @@ export interface OrderItem {
   itemid: number;
   quantity: number;
   price: number;
+  note?: string;
 }
 
 export interface Order {

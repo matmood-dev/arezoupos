@@ -62,7 +62,7 @@ router.get('/', authenticateToken, requireAdminForDelete, async (req: Request, r
       ordersWithItems = await Promise.all(
       ordersResult.rows.map(async (order: any) => {
         const itemsResult = await query(`
-          SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+          SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
           FROM order_items oi
           JOIN items i ON oi.itemid = i.itemid
           WHERE oi.orderid = ?
@@ -75,7 +75,8 @@ router.get('/', authenticateToken, requireAdminForDelete, async (req: Request, r
             quantity: item.quantity,
             price: parseFloat(item.price),
             name: item.name,
-            category: item.category
+            category: item.category,
+            note: item.note
           }))
         };
       })
@@ -164,7 +165,7 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
 
     // Get order items
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
       FROM order_items oi
       JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
@@ -177,7 +178,8 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
         quantity: item.quantity,
         price: parseFloat(item.price),
         name: item.name,
-        category: item.category
+        category: item.category,
+        note: item.note
       }))
     };
 
@@ -218,7 +220,7 @@ router.get('/:orderid/receipt', authenticateToken, validateIdParam, async (req: 
     }
 
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
       FROM order_items oi
       JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
@@ -235,7 +237,8 @@ router.get('/:orderid/receipt', authenticateToken, validateIdParam, async (req: 
         quantity: item.quantity,
         price: parseFloat(item.price),
         name: item.name,
-        category: item.category
+        category: item.category,
+        note: item.note
       }))
     };
 
@@ -374,7 +377,7 @@ router.get('/:orderid/receipt.pdf', validateIdParam, async (req: Request, res: R
     }
 
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
       FROM order_items oi
       JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
@@ -390,7 +393,8 @@ router.get('/:orderid/receipt.pdf', validateIdParam, async (req: Request, res: R
         quantity: item.quantity,
         price: parseFloat(item.price),
         name: item.name,
-        category: item.category
+        category: item.category,
+        note: item.note
       }))
     };
 
@@ -607,18 +611,29 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
     const orderItemsWithPrices: OrderItem[] = [];
 
     for (const item of items) {
-      const [itemRows] = await client.execute(`
-        SELECT price FROM items WHERE itemid = ?
-      `, [item.itemid]);
+      // Use the price from the request if provided (custom price), otherwise fetch from database
+      let price: number;
+      
+      if (item.price !== undefined && item.price !== null) {
+        // Custom price provided from frontend
+        price = typeof item.price === 'number' ? item.price : parseFloat(String(item.price));
+      } else {
+        // Fetch default price from database
+        const [itemRows] = await client.execute(`
+          SELECT price FROM items WHERE itemid = ?
+        `, [item.itemid]);
 
-      const rows = itemRows as any[];
-      const price = parseFloat(rows[0].price);
+        const rows = itemRows as any[];
+        price = parseFloat(rows[0].price);
+      }
+
       totalAmount += price * item.quantity;
 
       orderItemsWithPrices.push({
         itemid: item.itemid,
         quantity: item.quantity,
-        price: price
+        price: price,
+        note: item.note
       });
     }
 
@@ -636,9 +651,9 @@ router.post('/', authenticateToken, validateOrderCreation, handleValidationError
     // Create order items and update stock (reserve stock for pending order)
     for (const item of orderItemsWithPrices) {
       await client.execute(`
-        INSERT INTO order_items (orderid, itemid, quantity, price)
-        VALUES (?, ?, ?, ?)
-      `, [newOrderId, item.itemid, item.quantity, item.price]);
+        INSERT INTO order_items (orderid, itemid, quantity, price, note)
+        VALUES (?, ?, ?, ?, ?)
+      `, [newOrderId, item.itemid, item.quantity, item.price, item.note || null]);
 
       // Update stock quantity
       await client.execute(`
@@ -834,7 +849,7 @@ router.put('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
 
     // Get order items for complete response
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
       FROM order_items oi
       JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
@@ -848,7 +863,8 @@ router.put('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
         quantity: item.quantity,
         price: parseFloat(item.price),
         name: item.name,
-        category: item.category
+        category: item.category,
+        note: item.note
       }))
     };
 

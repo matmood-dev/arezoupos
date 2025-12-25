@@ -207,11 +207,31 @@ const createTables = async (): Promise<void> => {
         itemid INT NOT NULL,
         quantity INT NOT NULL CHECK (quantity > 0),
         price DECIMAL(10,2) NOT NULL CHECK (price >= 0),
+        note TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (orderid) REFERENCES orders(orderid) ON DELETE CASCADE,
         FOREIGN KEY (itemid) REFERENCES items(itemid)
       )
     `);
+
+    // Add note column to existing order_items table if it doesn't exist
+    try {
+      const [columns] = await connection.execute(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'order_items' AND COLUMN_NAME = 'note'
+      `, [process.env.DB_NAME || 'pos_system']);
+
+      const columnRows = columns as any[];
+      if (columnRows.length === 0) {
+        await connection.execute(`
+          ALTER TABLE order_items ADD COLUMN note TEXT AFTER price
+        `);
+        console.log('✅ Added note column to order_items table');
+      }
+    } catch (error) {
+      console.log('⚠️  Could not check/add note column to order_items:', error instanceof Error ? error.message : 'Unknown error');
+    }
 
     // Create settings table
     await connection.execute(`
