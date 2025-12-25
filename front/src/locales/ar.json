@@ -175,7 +175,6 @@
         "current_image": "الصورة الحالية:",
         "new_image_selected": "تم اختيار صورة جديدة: {{name}}",
         "keep_current_image": "اترك فارغاً للاحتفاظ بالصورة الحالية",
-        "missing_category": "فئة مفقودة: \"{{name}}\"",
         "readd_button": "إعادة الإضافة",
         "category_readded": "تمت إعادة إضافة الفئة",
         "category_readd_error": "فشل إعادة إضافة الفئة",

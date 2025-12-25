@@ -174,7 +174,6 @@
         "current_image": "Current Image:",
         "new_image_selected": "New image selected: {{name}}",
         "keep_current_image": "Leave empty to keep current image",
-        "missing_category": "Missing category: \"{{name}}\"",
         "readd_button": "Re-add",
         "category_readded": "Category re-added",
         "category_readd_error": "Failed to re-add category",

@@ -174,7 +174,6 @@
         "current_image": "تصویر فعلی:",
         "new_image_selected": "تصویر جدید انتخاب شد: {{name}}",
         "keep_current_image": "برای حفظ تصویر فعلی خالی بگذارید",
-        "missing_category": "دسته‌بندی گم شده: \"{{name}}\"",
         "readd_button": "دوباره اضافه کنید",
         "category_readded": "دسته‌بندی دوباره اضافه شد",
         "category_readd_error": "دوباره اضافه کردن دسته‌بندی ناموفق بود",

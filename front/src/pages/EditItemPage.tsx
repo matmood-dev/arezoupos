@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { itemsAPI, settingsAPI, type Item } from '../services/api';
+import { itemsAPI, type Item } from '../services/api';
 import useCategories from '../hooks/useCategories';
 import { Button } from '../components/Button';
 import { HiOutlineArrowLeft, HiOutlineCheck, HiOutlineX } from 'react-icons/hi';
@@ -394,22 +394,7 @@ const ErrorContainer = styled.div`
   border: 1px solid rgba(239, 68, 68, 0.3);
 `;
 
-const AddButton = styled.button`
-  padding: 4px 12px;
-  background: ${props => props.theme.gradients.primary};
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.2s ease;
 
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: ${props => props.theme.shadows.small};
-  }
-`;
 
 const EditItemPage: React.FC = () => {
   const { t } = useTranslation();
@@ -426,8 +411,7 @@ const EditItemPage: React.FC = () => {
     stock_quantity: '',
     image: null as File | null
   });
-  const { categories, loading: categoriesLoading, reload: reloadCategories } = useCategories();
-  const [missingCategory, setMissingCategory] = useState<string | null>(null);
+  const { categories, loading: categoriesLoading } = useCategories();
 
   // Fetch item data on component mount
   const fetchItem = useCallback(async () => {
@@ -467,10 +451,6 @@ const EditItemPage: React.FC = () => {
     const found = categories.find(c => c.name === item.category);
     if (found) {
       setFormData(prev => ({ ...prev, category: found.categoryid.toString() }));
-      setMissingCategory(null);
-    } else if (item.category) {
-      setFormData(prev => ({ ...prev, category: item.category }));
-      setMissingCategory(item.category);
     }
   }, [item, categories, categoriesLoading]);
 
@@ -595,25 +575,6 @@ const EditItemPage: React.FC = () => {
                   ))
                 )}
               </Select>
-              {missingCategory && (
-                <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <em style={{ color: '#f59e0b' }}>{t('editItem.missing_category', { name: missingCategory })}</em>
-                  <AddButton onClick={async () => {
-                    try {
-                      const resp = await settingsAPI.createCategory({ name: missingCategory });
-                      if (resp.success && resp.data) {
-                        await reloadCategories();
-                        setFormData(prev => ({ ...prev, category: resp.data!.categoryid.toString() }));
-                        setMissingCategory(null);
-                        toast.success(t('editItem.category_readded'));
-                      }
-                    } catch (err) {
-                      console.error(err);
-                      toast.error(t('editItem.category_readd_error'));
-                    }
-                  }}>{t('editItem.readd_button')}</AddButton>
-                </div>
-              )}
             </FormGroup>
           </FormRow>
 
