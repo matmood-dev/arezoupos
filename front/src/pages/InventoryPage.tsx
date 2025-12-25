@@ -1200,7 +1200,6 @@ const InventoryPage: React.FC = () => {
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewMode, setViewMode] = useViewMode();
-  const [showArchived, setShowArchived] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
   // Track mobile state so we can disable list view on small screens
@@ -1231,7 +1230,7 @@ const InventoryPage: React.FC = () => {
   const fetchItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await itemsAPI.getAll(showArchived ? { archivedOnly: true } : {});
+      const response = await itemsAPI.getAll({});
       if (response.success && response.data) {
         setItems(response.data);
       } else {
@@ -1243,7 +1242,7 @@ const InventoryPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [t, showArchived]);
+  }, [t]);
 
   // Fetch items on component mount
   useEffect(() => {
@@ -1286,20 +1285,18 @@ const InventoryPage: React.FC = () => {
     const itemToDelete = items.find(item => item.itemid === itemId);
     if (!itemToDelete) return;
 
-    // Show confirmation toast with custom actions
+    // Show confirmation toast
     toast((toastInstance) => (
       <div>
         <div style={{ marginBottom: '8px', fontWeight: '500' }}>
-          {t('inventory.archive_confirm_title', { name: itemToDelete.name })}
+          Delete {itemToDelete.name}?
         </div>
         <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>
-          {t('inventory.archive_confirm_message')}
+          This will permanently remove the item. Orders will show "Deleted Item".
         </div>
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button
-            onClick={() => {
-              toast.dismiss(toastInstance.id);
-            }}
+            onClick={() => toast.dismiss(toastInstance.id)}
             style={{
               padding: '6px 12px',
               border: '1px solid #d1d5db',
@@ -1314,13 +1311,12 @@ const InventoryPage: React.FC = () => {
           <button
             onClick={() => {
               toast.dismiss(toastInstance.id);
-              // Proceed with archiving
               performDelete(itemToDelete);
             }}
             style={{
               padding: '6px 12px',
               border: 'none',
-              background: '#f59e0b',
+              background: '#ef4444',
               color: 'white',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -1328,15 +1324,15 @@ const InventoryPage: React.FC = () => {
               fontWeight: '500'
             }}
           >
-            {t('inventory.archive')}
+            Delete
           </button>
         </div>
       </div>
     ), {
-      duration: 10000, // 10 seconds
+      duration: 10000,
       style: {
-        background: '#fef3c7',
-        border: '1px solid #fcd34d',
+        background: '#fff1f2',
+        border: '1px solid #fecaca',
         borderRadius: '8px',
         padding: '16px'
       }
@@ -1387,10 +1383,10 @@ const InventoryPage: React.FC = () => {
     toast((toastInstance) => (
       <div>
         <div style={{ marginBottom: '8px', fontWeight: '500' }}>
-          Archive {selectedItems.size} item(s)?
+          Delete {selectedItems.size} item(s) permanently?
         </div>
         <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>
-          This will move the selected items to the archive. You can restore them later from the archived items view.
+          This will permanently remove the items. Orders will show "Deleted Item" for these items.
         </div>
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button
@@ -1409,12 +1405,12 @@ const InventoryPage: React.FC = () => {
           <button
             onClick={() => {
               toast.dismiss(toastInstance.id);
-              performBulkArchive();
+              performBulkDelete();
             }}
             style={{
               padding: '6px 12px',
               border: 'none',
-              background: '#f59e0b',
+              background: '#ef4444',
               color: 'white',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -1422,124 +1418,42 @@ const InventoryPage: React.FC = () => {
               fontWeight: '500'
             }}
           >
-            Archive All
-          </button>
-        </div>
-      </div>
-    ), {
-      duration: 10000,
-      style: {
-        background: '#fffbeb',
-        border: '1px solid #fef3c7',
-        borderRadius: '8px',
-        padding: '16px'
-      }
-    });
-
-    // prevent TypeScript unused-local error if function is not wired up yet
-    void handleBulkDelete;
-  };
-
-  const performBulkArchive = async () => {
-    // Only archive items that are currently active
-    const itemsToArchive = Array.from(selectedItems).filter(id => {
-      const it = items.find(i => i.itemid === id);
-      return it && it.active;
-    });
-
-    if (itemsToArchive.length === 0) {
-      toast.error(t('inventory.no_active_selected') || 'No active items selected to archive');
-      return;
-    }
-
-    const loadingToast = toast.loading(`Archiving ${itemsToArchive.length} item(s)...`);
-
-    try {
-      // Archive items one by one
-      const archivePromises = itemsToArchive.map(itemId => itemsAPI.delete(itemId));
-      await Promise.all(archivePromises);
-
-      toast.success(`Successfully archived ${itemsToArchive.length} item(s)`, {
-        id: loadingToast
-      });
-
-      // Refresh items list
-      await fetchItems();
-      setSelectedItems(new Set());
-    } catch (err) {
-      toast.error('Failed to archive some items', {
-        id: loadingToast
-      });
-      console.error('Bulk archive error:', err);
-    }
-  };
-
-  const handleBulkPermanentDelete = async () => {
-    // Only consider archived items for permanent deletion
-    const archivedSelected = Array.from(selectedItems).filter(id => {
-      const it = items.find(i => i.itemid === id);
-      return it && !it.active;
-    });
-
-    if (archivedSelected.length === 0) {
-      toast.error(t('inventory.permanent_delete_error') || 'No archived items selected');
-      return;
-    }
-
-    toast((toastInstance) => (
-      <div>
-        <div style={{ marginBottom: '8px', fontWeight: '500' }}>
-          {t('inventory.permanent_delete_confirm_title', { name: `${archivedSelected.length} items` }) || `Delete ${archivedSelected.length} items permanently?`}
-        </div>
-        <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>
-          {t('inventory.permanent_delete_confirm_message') || 'This will permanently remove the items from the database. Orders will retain a reference to these items as deleted items.'}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={() => { toast.dismiss(toastInstance.id); }}
-            style={{ padding: '6px 12px', border: '1px solid #d1d5db', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            onClick={async () => {
-              toast.dismiss(toastInstance.id);
-              await performBulkPermanentDelete(archivedSelected);
-            }}
-            style={{ padding: '6px 12px', border: 'none', background: '#ef4444', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
-          >
-            {t('inventory.permanent_delete') || 'Delete permanently'}
+            Delete
           </button>
         </div>
       </div>
     ), {
       duration: 15000,
-      style: { background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px' }
+      style: {
+        background: '#fff1f2',
+        border: '1px solid #fecaca',
+        borderRadius: '8px',
+        padding: '16px'
+      }
     });
   };
 
-  const performBulkPermanentDelete = async (ids: number[]) => {
-    if (ids.length === 0) return;
-    const loadingToast = toast.loading(`Deleting ${ids.length} items permanently...`);
+  const performBulkDelete = async () => {
+    const ids = Array.from(selectedItems);
+    const loadingToast = toast.loading(`Deleting ${ids.length} item(s)...`);
 
     try {
-      const results = await Promise.allSettled(ids.map(id => itemsAPI.permanentDelete(id)));
+      const results = await Promise.allSettled(ids.map(id => itemsAPI.delete(id)));
       const successes = results.filter(r => r.status === 'fulfilled').length;
       const failures = results.length - successes;
 
       if (successes > 0) {
-        toast.success(t('inventory.permanent_delete_success', { name: `${successes} item(s)` }) || `${successes} items permanently deleted`, { id: loadingToast });
+        toast.success(`${successes} item(s) deleted successfully`, { id: loadingToast });
       }
       if (failures > 0) {
-        toast.error(t('inventory.permanent_delete_error') || `${failures} items failed to delete`, { id: loadingToast });
-        console.error('Bulk permanent delete failures:', results.filter(r => r.status === 'rejected'));
+        toast.error(`${failures} items failed to delete`, { id: loadingToast });
       }
 
       await fetchItems();
       setSelectedItems(new Set());
     } catch (err) {
-      toast.error(t('inventory.permanent_delete_error') || 'Failed to permanently delete items', { id: loadingToast });
-      console.error('Bulk permanent delete error:', err);
+      toast.error('Failed to delete items', { id: loadingToast });
+      console.error('Bulk delete error:', err);
     }
   };
 
@@ -1587,106 +1501,16 @@ const InventoryPage: React.FC = () => {
     toast.promise(
       itemsAPI.delete(item.itemid),
       {
-        loading: t('inventory.archiving', { name: item.name }),
+        loading: t('inventory.deleting', { name: item.name }) || 'Deleting...',
         success: (response) => {
           if (response.success) {
             setItems(items.filter(i => i.itemid !== item.itemid));
-            return t('inventory.archive_success', { name: item.name });
+            return t('inventory.delete_success', { name: item.name }) || 'Deleted successfully';
           } else {
-            throw new Error(t('inventory.archive_error'));
+            throw new Error(t('inventory.delete_error') || 'Failed to delete');
           }
         },
-        error: (err) => err instanceof Error ? err.message : t('inventory.archive_error')
-      }
-    );
-  };
-
-  const handlePermanentDelete = async (item: Item) => {
-    // Only allow permanent delete for archived items
-    if (item.active) return;
-
-    toast((toastInstance) => (
-      <div>
-        <div style={{ marginBottom: '8px', fontWeight: '500' }}>
-          {t('inventory.permanent_delete_confirm_title', { name: item.name }) || `Delete ${item.name} permanently?`}
-        </div>
-        <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>
-          {t('inventory.permanent_delete_confirm_message') || 'This will permanently remove the item from the database. Orders will retain a reference to this item as a deleted item.'}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={() => {
-              toast.dismiss(toastInstance.id);
-            }}
-            style={{
-              padding: '6px 12px',
-              border: '1px solid #d1d5db',
-              background: 'white',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            onClick={() => {
-              toast.dismiss(toastInstance.id);
-              toast.promise(
-                itemsAPI.permanentDelete(item.itemid),
-                {
-                  loading: t('inventory.permanent_deleting', { name: item.name }) || 'Deleting...',
-                  success: (response) => {
-                    if (response.success) {
-                      setItems(items.filter(i => i.itemid !== item.itemid));
-                      return t('inventory.permanent_delete_success', { name: item.name }) || 'Deleted permanently';
-                    }
-                    throw new Error(t('inventory.permanent_delete_error') || 'Failed to delete item');
-                  },
-                  error: (err) => err instanceof Error ? err.message : (t('inventory.permanent_delete_error') || 'Failed to delete item')
-                }
-              );
-            }}
-            style={{
-              padding: '6px 12px',
-              border: 'none',
-              background: '#ef4444',
-              color: 'white',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}
-          >
-            {t('inventory.permanent_delete') || 'Delete permanently'}
-          </button>
-        </div>
-      </div>
-    ), {
-      duration: 15000,
-      style: {
-        background: '#fff1f2',
-        border: '1px solid #fecaca',
-        borderRadius: '8px',
-        padding: '16px'
-      }
-    });
-  };
-
-  const handleUnarchiveItem = async (item: Item) => {
-    toast.promise(
-      itemsAPI.unarchive(item.itemid),
-      {
-        loading: t('inventory.unarchiving', { name: item.name }),
-        success: (response) => {
-          if (response.success) {
-            setItems(items.filter(i => i.itemid !== item.itemid));
-            return t('inventory.unarchive_success', { name: item.name });
-          } else {
-            throw new Error(t('inventory.unarchive_error'));
-          }
-        },
-        error: (err) => err instanceof Error ? err.message : t('inventory.unarchive_error')
+        error: (err) => err instanceof Error ? err.message : (t('inventory.delete_error') || 'Failed to delete')
       }
     );
   };
@@ -1849,15 +1673,10 @@ const InventoryPage: React.FC = () => {
             </ViewToggle>
           )}
 
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <ViewToggleButton $active={showArchived} onClick={() => setShowArchived(!showArchived)}>
-              {showArchived ? t('inventory.hide_archived') : t('inventory.show_archived')}
-            </ViewToggleButton>
-            <AddButton onClick={handleAddItem}>
-              <HiOutlinePlus />
-              {t('inventory.add_item')}
-            </AddButton>
-          </div>
+          <AddButton onClick={handleAddItem}>
+            <HiOutlinePlus />
+            {t('inventory.add_item')}
+          </AddButton>
         </ControlsSection>
 
         {showAddForm && (
@@ -1982,22 +1801,11 @@ const InventoryPage: React.FC = () => {
                 <HiOutlineCheck />
                 {t('inventory.update_stock') || 'Update Stock'}
               </BulkButton>
-              {canDeleteItems && !showArchived && (
-                <BulkButton $variant='danger' onClick={handleBulkDelete} style={{ background: '#f59e0b', borderColor: '#f59e0b' }}>
-                  <HiOutlineTrash />
-                  {t('inventory.archive_selected') || 'Archive Selected'}
-                </BulkButton>
-              )}
               {canDeleteItems && (
-                <>
-                  {/* If viewing archived items, offer permanent delete in bulk */}
-                  {showArchived && (
-                    <BulkButton $variant='danger' onClick={handleBulkPermanentDelete} style={{ background: '#dc2626', borderColor: '#dc2626' }}>
-                      <HiOutlineX />
-                      {t('inventory.permanent_delete')}
-                    </BulkButton>
-                  )}
-                </>
+                <BulkButton $variant='danger' onClick={handleBulkDelete}>
+                  <HiOutlineTrash />
+                  Delete Selected
+                </BulkButton>
               )}
             </BulkActionsRight>
           </BulkActionsBar>

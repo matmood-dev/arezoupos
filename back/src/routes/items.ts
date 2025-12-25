@@ -377,7 +377,7 @@ router.put('/:itemid', authenticateToken, requireAdminForDelete, upload.single('
  * @swagger
  * /api/items/{itemid}:
  *   delete:
- *     summary: Archive an item (soft delete)
+ *     summary: Delete an item permanently
  *     tags: [Items]
  *     security:
  *       - bearerAuth: []
@@ -386,14 +386,31 @@ router.delete('/:itemid', authenticateToken, requireAdmin, validateIdParam, asyn
   try {
     const { itemid } = req.params;
 
-    // Archive the item by setting active = false
-    const result = await query(`
-      UPDATE items SET active = false WHERE itemid = ?
-    `, [itemid]);
+    // Check if item exists and get image path
+    const itemResult = await query('SELECT image FROM items WHERE itemid = ?', [itemid]);
+    if (!itemResult.rows || itemResult.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Item not found' });
+      return;
+    }
+
+    const itemImage = (itemResult.rows[0] as any).image;
+
+    // Delete image file if exists
+    if (itemImage) {
+      try {
+        const imagePath = path.join(process.cwd(), 'uploads', path.basename(itemImage));
+        await fs.unlink(imagePath);
+      } catch (error) {
+        console.log('Could not delete image file:', error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    // Delete the item from database
+    const result = await query('DELETE FROM items WHERE itemid = ?', [itemid]);
 
     res.json({
       success: true,
-      message: 'Item archived successfully'
+      message: 'Item deleted successfully'
     });
   } catch (error) {
     console.error('Archive item error:', error);

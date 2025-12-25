@@ -64,9 +64,9 @@ router.get('/', authenticateToken, requireAdminForDelete, async (req: Request, r
       ordersWithItems = await Promise.all(
       ordersResult.rows.map(async (order: any) => {
         const itemsResult = await query(`
-          SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
+          SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
           FROM order_items oi
-          JOIN items i ON oi.itemid = i.itemid
+          LEFT JOIN items i ON oi.itemid = i.itemid
           WHERE oi.orderid = ?
         `, [order.orderid]);
 
@@ -169,9 +169,9 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
 
     // Get order items
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
       FROM order_items oi
-      JOIN items i ON oi.itemid = i.itemid
+      LEFT JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
     `, [orderid]);
 
@@ -226,9 +226,9 @@ router.get('/:orderid/receipt', authenticateToken, validateIdParam, async (req: 
     }
 
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
       FROM order_items oi
-      JOIN items i ON oi.itemid = i.itemid
+      LEFT JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
     `, [orderid]);
 
@@ -383,9 +383,9 @@ router.get('/:orderid/receipt.pdf', validateIdParam, async (req: Request, res: R
     }
 
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
       FROM order_items oi
-      JOIN items i ON oi.itemid = i.itemid
+      LEFT JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
     `, [orderid]);
 
@@ -855,9 +855,9 @@ router.put('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
 
     // Get order items for complete response
     const itemsResult = await query(`
-      SELECT oi.itemid, oi.quantity, oi.price, oi.note, i.name, i.category
+      SELECT oi.itemid, oi.quantity, oi.price, oi.note, COALESCE(i.name, 'Deleted Item') as name, i.category
       FROM order_items oi
-      JOIN items i ON oi.itemid = i.itemid
+      LEFT JOIN items i ON oi.itemid = i.itemid
       WHERE oi.orderid = ?
     `, [orderid]);
 

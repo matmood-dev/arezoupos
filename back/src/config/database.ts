@@ -233,6 +233,41 @@ const createTables = async (): Promise<void> => {
       console.log('⚠️  Could not check/add note column to order_items:', error instanceof Error ? error.message : 'Unknown error');
     }
 
+    // Modify itemid foreign key to allow NULL (for deleted items)
+    try {
+      // First check if we need to modify the foreign key
+      const [constraints] = await connection.execute(`
+        SELECT CONSTRAINT_NAME 
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'order_items' AND COLUMN_NAME = 'itemid' AND REFERENCED_TABLE_NAME = 'items'
+      `, [process.env.DB_NAME || 'pos_system']);
+
+      const constraintRows = constraints as any[];
+      if (constraintRows.length > 0) {
+        const constraintName = constraintRows[0].CONSTRAINT_NAME;
+        
+        // Drop the existing foreign key
+        await connection.execute(`
+          ALTER TABLE order_items DROP FOREIGN KEY ${constraintName}
+        `);
+        
+        // Modify the column to allow NULL
+        await connection.execute(`
+          ALTER TABLE order_items MODIFY COLUMN itemid INT NULL
+        `);
+        
+        // Add the foreign key back with ON DELETE SET NULL
+        await connection.execute(`
+          ALTER TABLE order_items ADD CONSTRAINT ${constraintName} 
+          FOREIGN KEY (itemid) REFERENCES items(itemid) ON DELETE SET NULL
+        `);
+        
+        console.log('✅ Modified itemid in order_items to allow NULL for deleted items');
+      }
+    } catch (error) {
+      console.log('⚠️  Could not modify itemid foreign key:', error instanceof Error ? error.message : 'Unknown error');
+    }
+
     // Create settings table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS settings (
