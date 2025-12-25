@@ -420,6 +420,13 @@ router.delete('/:customerid', authenticateToken, requireAdmin, validateIdParam, 
   try {
     const { customerid } = req.params;
 
+    // Update orders to show "Deleted Customer" instead of leaving orphaned references
+    await query(`
+      UPDATE orders 
+      SET customerid = NULL 
+      WHERE customerid = ?
+    `, [customerid]);
+
     const result = await query(`
       DELETE FROM customers
       WHERE customerid = ?

@@ -45,7 +45,9 @@ router.get('/', authenticateToken, requireAdminForDelete, async (req: Request, r
     // Get orders with customer and branch info
     const ordersResult = await query(`
       SELECT o.orderid, o.customerid, o.branchid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             COALESCE(c.name, 'Deleted Customer') as customer_name, 
+             c.email as customer_email, 
+             c.phone as customer_phone,
              b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
@@ -147,7 +149,9 @@ router.get('/:orderid', authenticateToken, requireAdminForDelete, validateIdPara
     // Get order with customer and branch info
     const orderResult = await query(`
       SELECT o.orderid, o.customerid, o.branchid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             COALESCE(c.name, 'Deleted Customer') as customer_name, 
+             c.email as customer_email, 
+             c.phone as customer_phone,
              b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
@@ -206,7 +210,9 @@ router.get('/:orderid/receipt', authenticateToken, validateIdParam, async (req: 
     // Get order with customer and branch info
     const orderResult = await query(`
       SELECT o.orderid, o.customerid, o.branchid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone,
+             COALESCE(c.name, 'Deleted Customer') as customer_name, 
+             c.email as customer_email, 
+             c.phone as customer_phone,
              b.name as branch_name, b.address as branch_address, b.phone as branch_phone, b.cr as branch_cr
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
@@ -365,7 +371,7 @@ router.get('/:orderid/receipt.pdf', validateIdParam, async (req: Request, res: R
     // Reuse the same HTML generation logic
     const orderResult = await query(`
       SELECT o.orderid, o.customerid, o.total_amount, o.status, o.created_at, o.updated_at,
-             c.name as customer_name, c.email as customer_email, c.phone as customer_phone
+             COALESCE(c.name, 'Deleted Customer') as customer_name, c.email as customer_email, c.phone as customer_phone
       FROM orders o
       LEFT JOIN customers c ON o.customerid = c.customerid
       WHERE o.orderid = ?

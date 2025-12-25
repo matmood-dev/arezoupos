@@ -6,7 +6,7 @@ import styled from 'styled-components';
 import { customersAPI, type Customer, type CreateCustomerRequest } from '../services/api';
 import { Button } from '../components/Button';
 import { usePermissions } from '../hooks/usePermissions';
-import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlineX, HiOutlineCheck, HiOutlinePhone, HiOutlineMail, HiOutlineLocationMarker, HiOutlineViewGrid, HiOutlineViewList, HiOutlineSearch, HiOutlineChevronDown } from 'react-icons/hi';
+import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlinePhone, HiOutlineMail, HiOutlineLocationMarker, HiOutlineViewGrid, HiOutlineViewList, HiOutlineSearch, HiOutlineChevronDown } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
@@ -958,7 +958,7 @@ const CustomersPage: React.FC = () => {
   const [viewMode, setViewMode] = useViewMode();
   const [filters, setFilters] = useState<AdvancedFilter>({});
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -970,7 +970,7 @@ const CustomersPage: React.FC = () => {
   const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await customersAPI.getAll(showArchived ? { archivedOnly: true } : {});
+      const response = await customersAPI.getAll({});
       if (response.success && response.data) {
         setCustomers(response.data);
       } else {
@@ -981,7 +981,7 @@ const CustomersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [showArchived, t]);
+  }, [t]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
@@ -1101,78 +1101,46 @@ const CustomersPage: React.FC = () => {
   // Clear selection
   const handleClearSelection = () => setSelectedCustomers(new Set());
 
-  // Bulk archive (active view) or bulk permanent delete (archived view)
+  // Bulk delete
   const handleBulkDelete = async () => {
     if (selectedCustomers.size === 0) return;
 
-    // If viewing archived customers, confirm permanent delete
-    if (showArchived) {
-      toast((toastInstance) => (
-        <div>
-          <div style={{ marginBottom: '8px', fontWeight: '500' }}>Delete {selectedCustomers.size} customer(s) permanently?</div>
-          <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>This will permanently remove the customers. Orders will retain a reference to these customers as deleted customers.</div>
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button onClick={() => toast.dismiss(toastInstance.id)} style={{ padding: '6px 12px', border: '1px solid #d1d5db', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>{t('common.cancel')}</button>
-            <button onClick={() => { toast.dismiss(toastInstance.id); performBulkPermanentDelete(); }} style={{ padding: '6px 12px', border: 'none', background: '#ef4444', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>{t('customers.permanent_delete') || 'Delete permanently'}</button>
-          </div>
-        </div>
-      ), { duration: 15000, style: { background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px' } });
-
-      return;
-    }
-
-    // Otherwise confirm archive
     toast((toastInstance) => (
       <div>
-        <div style={{ marginBottom: '8px', fontWeight: '500' }}>Archive {selectedCustomers.size} customer(s)?</div>
-        <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>This will move the selected customers to the archive. You can restore them later.</div>
+        <div style={{ marginBottom: '8px', fontWeight: '500' }}>Delete {selectedCustomers.size} customer(s) permanently?</div>
+        <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>This will permanently remove the customers. Orders will show "Deleted Customer" for these customers.</div>
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button onClick={() => toast.dismiss(toastInstance.id)} style={{ padding: '6px 12px', border: '1px solid #d1d5db', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>{t('common.cancel')}</button>
-          <button onClick={() => { toast.dismiss(toastInstance.id); performBulkArchive(); }} style={{ padding: '6px 12px', border: 'none', background: '#f59e0b', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>{t('customers.archive') || 'Archive'}</button>
+          <button onClick={() => { toast.dismiss(toastInstance.id); performBulkDelete(); }} style={{ padding: '6px 12px', border: 'none', background: '#ef4444', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>Delete</button>
         </div>
       </div>
-    ), { duration: 10000, style: { background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', padding: '16px' } });
+    ), { duration: 15000, style: { background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px' } });
   };
 
-  const performBulkArchive = async () => {
+  const performBulkDelete = async () => {
     const ids = Array.from(selectedCustomers);
-    const loadingToast = toast.loading(`Archiving ${ids.length} customers...`);
+    const loadingToast = toast.loading(`Deleting ${ids.length} customers...`);
     try {
-      await Promise.all(ids.map(id => customersAPI.delete(id)));
-      toast.success(`Successfully archived ${ids.length} customers`, { id: loadingToast });
-      await fetchCustomers();
-      setSelectedCustomers(new Set());
-    } catch (err) {
-      toast.error('Failed to archive some customers', { id: loadingToast });
-      console.error('Bulk archive customers error:', err);
-    }
-  };
-
-  const performBulkPermanentDelete = async () => {
-    const ids = Array.from(selectedCustomers);
-    const loadingToast = toast.loading(`Deleting ${ids.length} customers permanently...`);
-    try {
-      const results = await Promise.allSettled(ids.map(id => customersAPI.permanentDelete(id)));
+      const results = await Promise.allSettled(ids.map(id => customersAPI.delete(id)));
       const successes = results.filter(r => r.status === 'fulfilled').length;
       const failures = results.length - successes;
 
       if (successes > 0) {
-        toast.success(`${successes} customer(s) deleted permanently`, { id: loadingToast });
+        toast.success(`${successes} customer(s) deleted successfully`, { id: loadingToast });
       }
       if (failures > 0) {
         toast.error(`${failures} customers failed to delete`, { id: loadingToast });
-        console.error('Bulk permanent delete failures:', results.filter(r => r.status === 'rejected'));
       }
 
       await fetchCustomers();
       setSelectedCustomers(new Set());
     } catch (err) {
-      toast.error('Failed to permanently delete customers', { id: loadingToast });
-      console.error('Bulk permanent delete error:', err);
+      toast.error('Failed to delete customers', { id: loadingToast });
+      console.error('Bulk delete customers error:', err);
     }
   };
 
-  const handleEditCustomer = (customer: Customer) => {
+const handleEditCustomer = (customer: Customer) => {
     navigate(`/customers/edit/${customer.customerid}`);
   };
 
@@ -1180,27 +1148,18 @@ const CustomersPage: React.FC = () => {
     const customerToDelete = customers.find(customer => customer.customerid === customerId);
     if (!customerToDelete) return;
 
-    // If viewing archived, prompt for permanent delete instead (for a single customer)
-    if (!customerToDelete.active) {
-      // Delegate to a named handler so the action can be reused elsewhere
-      handlePermanentDelete(customerToDelete);
-      return;
-    }
-
-    // Show confirmation toast with custom actions (archive)
+    // Show confirmation toast
     toast((toastInstance) => (
       <div>
         <div style={{ marginBottom: '8px', fontWeight: '500' }}>
-          {t('customers.archive_confirm_title', { name: customerToDelete.name })}
+          Delete {customerToDelete.name}?
         </div>
         <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>
-          {t('customers.archive_confirm_message')}
+          This will permanently remove the customer. Orders will show "Deleted Customer".
         </div>
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button
-            onClick={() => {
-              toast.dismiss(toastInstance.id);
-            }}
+            onClick={() => toast.dismiss(toastInstance.id)}
             style={{
               padding: '6px 12px',
               border: '1px solid #d1d5db',
@@ -1215,13 +1174,12 @@ const CustomersPage: React.FC = () => {
           <button
             onClick={() => {
               toast.dismiss(toastInstance.id);
-              // Proceed with archiving
               performDelete(customerToDelete);
             }}
             style={{
               padding: '6px 12px',
               border: 'none',
-              background: '#f59e0b',
+              background: '#ef4444',
               color: 'white',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -1229,15 +1187,15 @@ const CustomersPage: React.FC = () => {
               fontWeight: '500'
             }}
           >
-            {t('customers.archive')}
+            Delete
           </button>
         </div>
       </div>
     ), {
-      duration: 10000, // 10 seconds
+      duration: 10000,
       style: {
-        background: '#fef3c7',
-        border: '1px solid #fcd34d',
+        background: '#fff1f2',
+        border: '1px solid #fecaca',
         borderRadius: '8px',
         padding: '16px'
       }
@@ -1248,62 +1206,21 @@ const CustomersPage: React.FC = () => {
     toast.promise(
       customersAPI.delete(customer.customerid),
       {
-        loading: t('customers.archiving', { name: customer.name }),
+        loading: t('customers.deleting', { name: customer.name }) || 'Deleting...',
         success: (response) => {
           if (response.success) {
             setCustomers(customers.filter(c => c.customerid !== customer.customerid));
-            return t('customers.archive_success', { name: customer.name });
+            return t('customers.delete_success', { name: customer.name }) || 'Deleted successfully';
           } else {
-            throw new Error(t('customers.archive_error'));
+            throw new Error(t('customers.delete_error') || 'Failed to delete');
           }
         },
-        error: (err) => err instanceof Error ? err.message : t('customers.archive_error')
+        error: (err) => err instanceof Error ? err.message : (t('customers.delete_error') || 'Failed to delete')
       }
     );
   };
 
-  const handleUnarchiveCustomer = async (customer: Customer) => {
-    toast.promise(
-      customersAPI.unarchive(customer.customerid),
-      {
-        loading: t('customers.unarchiving', { name: customer.name }),
-        success: (response) => {
-          if (response.success) {
-            setCustomers(customers.filter(c => c.customerid !== customer.customerid));
-            return t('customers.unarchive_success', { name: customer.name });
-          } else {
-            throw new Error(t('customers.unarchive_error'));
-          }
-        },
-        error: (err) => err instanceof Error ? err.message : t('customers.unarchive_error')
-      }
-    );
-  };
-
-  const handlePermanentDelete = async (customer: Customer) => {
-    toast((toastInstance) => (
-      <div>
-        <div style={{ marginBottom: '8px', fontWeight: '500' }}>
-          {t('customers.permanent_delete_confirm_title', { name: customer.name })}
-        </div>
-        <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>
-          {t('customers.permanent_delete_confirm_message') || 'This will permanently remove the customer. Orders will retain a reference to this customer as a deleted customer.'}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button onClick={() => toast.dismiss(toastInstance.id)} style={{ padding: '6px 12px', border: '1px solid #d1d5db', background: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}>{t('common.cancel')}</button>
-          <button onClick={() => { toast.dismiss(toastInstance.id); toast.promise(customersAPI.permanentDelete(customer.customerid), { loading: t('customers.permanent_deleting', { name: customer.name }) || 'Deleting...', success: (response) => {
-                if (response.success) {
-                  setCustomers(customers.filter(c => c.customerid !== customer.customerid));
-                  return t('customers.permanent_delete_success', { name: customer.name }) || 'Deleted permanently';
-                }
-                throw new Error(t('customers.permanent_delete_error') || 'Failed to delete customer');
-              }, error: (err) => err instanceof Error ? err.message : (t('customers.permanent_delete_error') || 'Failed to delete customer') }); }} style={{ padding: '6px 12px', border: 'none', background: '#ef4444', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}>{t('customers.permanent_delete') || 'Delete permanently'}</button>
-        </div>
-      </div>
-    ), { duration: 15000, style: { background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '16px' } });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const customerData: CreateCustomerRequest = {
@@ -1386,15 +1303,10 @@ const CustomersPage: React.FC = () => {
               {t('customers.view_list')}
             </ViewToggleButton>
           </ViewToggle>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <ViewToggleButton $active={showArchived} onClick={() => setShowArchived(!showArchived)}>
-              {showArchived ? t('customers.hide_archived') : t('customers.show_archived')}
-            </ViewToggleButton>
-            <AddButton onClick={handleAddCustomer}>
-              <HiOutlinePlus />
-              {t('customers.add_customer')}
-            </AddButton>
-          </div>
+          <AddButton onClick={handleAddCustomer}>
+            <HiOutlinePlus />
+            {t('customers.add_customer')}
+          </AddButton>
         </ControlsSection>
 
         {showAddForm && (
@@ -1490,14 +1402,9 @@ const CustomersPage: React.FC = () => {
                 <Button onClick={handleClearSelection} style={{ padding: '6px 12px', fontSize: '13px' }}>{t('inventory.clear_selection') || 'Clear Selection'}</Button>
               </BulkActionsLeft>
               <BulkActionsRight>
-                {canDeleteCustomers && !showArchived && (
-                  <BulkButton $variant='danger' onClick={handleBulkDelete} style={{ background: '#f59e0b', borderColor: '#f59e0b' }}>
-                    <HiOutlineTrash /> {t('customers.archive_selected') || 'Archive Selected'}
-                  </BulkButton>
-                )}
-                {canDeleteCustomers && showArchived && (
-                  <BulkButton $variant='danger' onClick={handleBulkDelete} style={{ background: '#ef4444', borderColor: '#ef4444' }}>
-                    <HiOutlineX /> {t('customers.permanent_delete') || 'Delete permanently'}
+                {canDeleteCustomers && (
+                  <BulkButton $variant='danger' onClick={handleBulkDelete}>
+                    <HiOutlineTrash /> Delete Selected
                   </BulkButton>
                 )}
               </BulkActionsRight>
@@ -1525,22 +1432,9 @@ const CustomersPage: React.FC = () => {
                         <HiOutlinePencil />
                       </ActionButton>
                       {canDeleteCustomers && (
-                        <>
-                          {customer.active ? (
-                            <ActionButton onClick={() => handleDeleteCustomer(customer.customerid)} title={t('customers.archive')}>
-                              <HiOutlineTrash />
-                            </ActionButton>
-                          ) : (
-                            <>
-                              <ActionButton onClick={() => handleUnarchiveCustomer(customer)} title={t('customers.unarchive')}>
-                                <HiOutlineCheck />
-                              </ActionButton>
-                              <ActionButton onClick={() => handlePermanentDelete(customer)} title={t('customers.permanent_delete')} style={{ color: '#ef4444' }}>
-                                <HiOutlineX />
-                              </ActionButton>
-                            </>
-                          )}
-                        </>
+                        <ActionButton onClick={() => handleDeleteCustomer(customer.customerid)} title={t('common.delete')}>
+                          <HiOutlineTrash />
+                        </ActionButton>
                       )}
                     </CustomerActions>
                   </div>
@@ -1616,17 +1510,9 @@ const CustomersPage: React.FC = () => {
                           <HiOutlinePencil />
                         </ActionButton>
                         {canDeleteCustomers && (
-                          <>
-                            {customer.active ? (
-                              <ActionButton onClick={() => handleDeleteCustomer(customer.customerid)} title={t('customers.archive')}>
-                                <HiOutlineTrash />
-                              </ActionButton>
-                            ) : (
-                              <ActionButton onClick={() => handleUnarchiveCustomer(customer)} title={t('customers.unarchive')}>
-                                <HiOutlineCheck />
-                              </ActionButton>
-                            )}
-                          </>
+                          <ActionButton onClick={() => handleDeleteCustomer(customer.customerid)} title={t('common.delete')}>
+                            <HiOutlineTrash />
+                          </ActionButton>
                         )}
                       </ListItemActions>
                     </ListItemDetails>
