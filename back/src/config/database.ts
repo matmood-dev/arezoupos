@@ -359,12 +359,6 @@ const createTables = async (): Promise<void> => {
       console.log('⚠️  Could not check/add cr column to branches:', error instanceof Error ? error.message : 'Unknown error');
     }
 
-    // Insert default branch if not exists
-    await connection.execute(`
-      INSERT IGNORE INTO branches (branchid, name, address, phone, active)
-      VALUES (1, 'Main Branch', '123 Main St', '+973 1234 5678', TRUE)
-    `);
-
     // Create item_categories table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS item_categories (
