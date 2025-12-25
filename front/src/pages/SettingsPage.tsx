@@ -683,7 +683,6 @@ const SettingsPage: React.FC = () => {
     confirmPassword: "",
     avatar: null as File | null,
   });
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
   // Load settings data on component mount
@@ -755,18 +754,6 @@ const SettingsPage: React.FC = () => {
       }));
     }
   }, [user]);
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProfileForm({ ...profileForm, avatar: file });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleProfileUpdate = async () => {
     if (!user) return;

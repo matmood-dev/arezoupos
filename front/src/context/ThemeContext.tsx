@@ -51,7 +51,7 @@ const lightTheme: Theme = {
     glow: '0 0 20px rgba(99, 102, 241, 0.4)',
   },
   gradients: {
-    primary: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+    primary: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)',
     secondary: 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)',
     background: 'linear-gradient(135deg, #e0f2fe 0%, #f3e8ff 50%, #fce7f3 100%)',
   },
@@ -79,7 +79,7 @@ const darkTheme: Theme = {
     glow: '0 0 30px rgba(139, 92, 246, 0.3)', 
   }, 
   gradients: { 
-    primary: 'linear-gradient(135deg, #8B5CF6 0%, #10B981 100%)', 
+    primary: 'linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%)', 
     secondary: 'linear-gradient(135deg, #EC4899 0%, #F59E0B 100%)', 
     background: 'linear-gradient(135deg, #434343 0%, #1a1a1a 50%, #000000 100%)', 
   }, 

@@ -1515,6 +1515,42 @@ const InventoryPage: React.FC = () => {
     );
   };
 
+  const handleUnarchiveItem = async (item: Item) => {
+    toast.promise(
+      itemsAPI.unarchive(item.itemid),
+      {
+        loading: t('inventory.unarchiving', { name: item.name }) || 'Unarchiving...',
+        success: (response) => {
+          if (response.success) {
+            setItems(items.filter(i => i.itemid !== item.itemid));
+            return t('inventory.unarchive_success', { name: item.name }) || 'Unarchived successfully';
+          } else {
+            throw new Error(t('inventory.unarchive_error') || 'Failed to unarchive');
+          }
+        },
+        error: (err) => err instanceof Error ? err.message : (t('inventory.unarchive_error') || 'Failed to unarchive')
+      }
+    );
+  };
+
+  const handlePermanentDelete = async (item: Item) => {
+    toast.promise(
+      itemsAPI.permanentDelete(item.itemid),
+      {
+        loading: t('inventory.permanent_deleting', { name: item.name }) || 'Permanently deleting...',
+        success: (response) => {
+          if (response.success) {
+            setItems(items.filter(i => i.itemid !== item.itemid));
+            return t('inventory.permanent_delete_success', { name: item.name }) || 'Permanently deleted';
+          } else {
+            throw new Error(t('inventory.permanent_delete_error') || 'Failed to permanently delete');
+          }
+        },
+        error: (err) => err instanceof Error ? err.message : (t('inventory.permanent_delete_error') || 'Failed to permanently delete')
+      }
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 

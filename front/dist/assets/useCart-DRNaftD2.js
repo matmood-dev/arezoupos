@@ -1,0 +1,1 @@
+import{r}from"./vendor-react-CRZW6wHZ.js";import{C as o}from"./index-v5rrbpvu.js";const a=()=>{const t=r.useContext(o);if(!t)throw new Error("useCart must be used within a CartProvider");return t};export{a as u};

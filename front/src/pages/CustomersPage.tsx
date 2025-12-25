@@ -6,7 +6,7 @@ import styled from 'styled-components';
 import { customersAPI, type Customer, type CreateCustomerRequest } from '../services/api';
 import { Button } from '../components/Button';
 import { usePermissions } from '../hooks/usePermissions';
-import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlinePhone, HiOutlineMail, HiOutlineLocationMarker, HiOutlineViewGrid, HiOutlineViewList, HiOutlineSearch, HiOutlineChevronDown } from 'react-icons/hi';
+import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash, HiOutlinePhone, HiOutlineMail, HiOutlineLocationMarker, HiOutlineViewGrid, HiOutlineViewList, HiOutlineSearch, HiOutlineChevronDown, HiOutlineX, HiOutlineCheck } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
